@@ -1,96 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Military Dark Theme */
+    --background: 220 20% 6%;
+    --foreground: 180 5% 85%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 18% 10%;
+    --card-foreground: 180 5% 85%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 20% 8%;
+    --popover-foreground: 180 5% 85%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* NATO Blue - Primary Actions */
+    --primary: 210 60% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Military Green - Secondary/Friendly */
+    --secondary: 120 25% 25%;
+    --secondary-foreground: 120 20% 85%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Dark Surface */
+    --muted: 220 15% 15%;
+    --muted-foreground: 180 5% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Tactical Accent */
+    --accent: 45 70% 55%;
+    --accent-foreground: 220 20% 6%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Hostile Red */
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 15% 20%;
+    --input: 220 15% 18%;
+    --ring: 210 60% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.25rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Custom Military Colors */
+    --hostile: 0 60% 45%;
+    --friendly: 120 25% 35%;
+    --neutral: 45 70% 55%;
+    --unknown: 280 40% 50%;
+    
+    /* Territory Colors */
+    --territory-friendly: 120 40% 30%;
+    --territory-hostile: 0 50% 35%;
+    --territory-contested: 45 60% 40%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Glow Effects */
+    --glow-primary: 210 80% 60%;
+    --glow-hostile: 0 70% 55%;
+    --glow-friendly: 120 50% 45%;
 
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 220 20% 8%;
+    --sidebar-foreground: 180 5% 85%;
+    --sidebar-primary: 210 60% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 180 5% 85%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 210 60% 50%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 220 20% 4%;
+    --foreground: 180 5% 90%;
   }
 }
 
@@ -100,6 +81,176 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-tactical antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom scrollbar for military theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary));
+  }
+}
+
+@layer components {
+  /* Tactical Panel Styles */
+  .tactical-panel {
+    @apply bg-card/95 backdrop-blur-sm border border-border;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .tactical-header {
+    @apply bg-muted/50 border-b border-border px-3 py-2 text-xs font-mono uppercase tracking-widest text-muted-foreground;
+  }
+
+  .tactical-button {
+    @apply relative overflow-hidden transition-all duration-200;
+  }
+
+  .tactical-button::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/10 to-primary/0 opacity-0 transition-opacity duration-300;
+  }
+
+  .tactical-button:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Scan line effect */
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanline::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
+    animation: scanline 4s linear infinite;
+  }
+
+  @keyframes scanline {
+    0% { top: 0; opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { top: 100%; opacity: 1; }
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 10px hsl(var(--glow-primary) / 0.3), 0 0 20px hsl(var(--glow-primary) / 0.1);
+  }
+
+  .glow-hostile {
+    box-shadow: 0 0 10px hsl(var(--glow-hostile) / 0.4), 0 0 20px hsl(var(--glow-hostile) / 0.2);
+  }
+
+  .glow-friendly {
+    box-shadow: 0 0 10px hsl(var(--glow-friendly) / 0.4), 0 0 20px hsl(var(--glow-friendly) / 0.2);
+  }
+
+  /* NATO Symbol Base */
+  .nato-symbol {
+    @apply flex items-center justify-center font-mono text-xs font-bold;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+
+  .nato-friendly {
+    @apply bg-friendly text-white;
+  }
+
+  .nato-hostile {
+    @apply bg-destructive text-white;
+  }
+
+  /* Territory influence overlay */
+  .territory-overlay {
+    @apply absolute inset-0 pointer-events-none;
+    background: radial-gradient(ellipse at center, hsl(var(--territory-friendly) / 0.3) 0%, transparent 70%);
+  }
+
+  /* Pulse animation for active elements */
+  .pulse-tactical {
+    animation: pulse-tactical 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-tactical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Grid overlay */
+  .grid-overlay {
+    background-image: 
+      linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+@layer utilities {
+  .text-tactical {
+    @apply font-mono text-xs uppercase tracking-wider;
+  }
+
+  .font-tactical {
+    font-family: 'Rajdhani', sans-serif;
+  }
+
+  .font-mono-tactical {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Status colors */
+  .text-hostile {
+    color: hsl(var(--hostile));
+  }
+
+  .text-friendly {
+    color: hsl(var(--friendly));
+  }
+
+  .text-neutral {
+    color: hsl(var(--neutral));
+  }
+
+  .bg-hostile {
+    background-color: hsl(var(--hostile));
+  }
+
+  .bg-friendly {
+    background-color: hsl(var(--friendly));
+  }
+
+  .bg-neutral {
+    background-color: hsl(var(--neutral));
+  }
+
+  .border-hostile {
+    border-color: hsl(var(--hostile));
+  }
+
+  .border-friendly {
+    border-color: hsl(var(--friendly));
+  }
+
+  .border-neutral {
+    border-color: hsl(var(--neutral));
   }
 }

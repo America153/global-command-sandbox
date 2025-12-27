@@ -1,14 +1,64 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useCallback, Suspense, lazy } from 'react';
+import { useGameStore } from '@/store/gameStore';
+import AssetPalette from '@/components/AssetPalette';
+import IntelPanel from '@/components/IntelPanel';
+import TimeControls from '@/components/TimeControls';
+import TopBar from '@/components/TopBar';
+import Globe from '@/components/Globe';
 
-const Index = () => {
+export default function Index() {
+  const { selectedTool, placeHQ, placeBase, addLog } = useGameStore();
+
+  const handleGlobeClick = useCallback((lat: number, lng: number) => {
+    if (!selectedTool) {
+      addLog('info', `Coordinates: ${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
+      return;
+    }
+
+    const position = { latitude: lat, longitude: lng };
+
+    if (selectedTool.type === 'hq') {
+      placeHQ(position);
+    } else if (selectedTool.type === 'base') {
+      placeBase(selectedTool.baseType, position);
+    }
+  }, [selectedTool, placeHQ, placeBase, addLog]);
+
+  const getSelectedToolLabel = () => {
+    if (!selectedTool) return null;
+    if (selectedTool.type === 'hq') return 'hq';
+    if (selectedTool.type === 'base') return selectedTool.baseType;
+    return null;
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
+      {/* Top Bar */}
+      <TopBar selectedTool={getSelectedToolLabel()} />
+
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Asset Palette */}
+        <AssetPalette />
+
+        {/* Center - Globe */}
+        <div className="flex-1 relative">
+          <Globe onGlobeClick={handleGlobeClick} />
+          
+          {/* Coordinate Overlay */}
+          <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
+            <span className="text-xs font-mono text-muted-foreground">
+              Click globe to interact
+            </span>
+          </div>
+        </div>
+
+        {/* Right Panel - Intel */}
+        <IntelPanel />
       </div>
+
+      {/* Bottom Bar - Time Controls */}
+      <TimeControls />
     </div>
   );
-};
-
-export default Index;
+}
