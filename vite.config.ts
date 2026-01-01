@@ -16,7 +16,10 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@zip.js/zip.js/lib/zip-no-worker.js": "@zip.js/zip.js/dist/zip-no-worker.min.js",
+      "@zip.js/zip.js/lib/zip-no-worker.js": path.resolve(
+        __dirname,
+        "./src/shims/zip-no-worker.ts",
+      ),
     },
   },
   optimizeDeps: {
