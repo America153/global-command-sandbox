@@ -16,6 +16,15 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@zip.js/zip.js/lib/zip-no-worker.js": "@zip.js/zip.js/dist/zip-no-worker.min.js",
+    },
+  },
+  optimizeDeps: {
+    include: ["cesium"],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/cesium/, /node_modules/],
     },
   },
 }));
