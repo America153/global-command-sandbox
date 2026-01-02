@@ -9,15 +9,32 @@ import type {
   Coordinates, 
   BaseType,
   UnitType,
-  TerritoryInfluence
+  TerritoryInfluence,
+  MissileType
 } from '@/types/game';
-import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
+import { BASE_CONFIG, UNIT_TEMPLATES, MISSILE_TEMPLATES } from '@/types/game';
 import { findCountryAtPosition } from '@/data/countries';
 import { getNextPosition } from '@/engine/terrain';
 
 interface DeploymentState {
   isActive: boolean;
   selectedUnitIds: string[];
+}
+
+interface MissileTargetingState {
+  isActive: boolean;
+  baseId: string | null;
+  missileType: MissileType | null;
+  targetPosition: Coordinates | null;
+}
+
+interface MissileInFlight {
+  id: string;
+  startPosition: Coordinates;
+  targetPosition: Coordinates;
+  missileType: MissileType;
+  launchTick: number;
+  arrivalTick: number;
 }
 
 interface GameStore extends GameState {
@@ -43,9 +60,24 @@ interface GameStore extends GameState {
   // Country control
   homeCountryId: string | null;
   occupiedCountryIds: string[];
+  struckCountryIds: string[];
+  // Missile targeting
+  missileTargeting: MissileTargetingState;
+  startMissileTargeting: (baseId: string, missileType: MissileType) => void;
+  cancelMissileTargeting: () => void;
+  fireMissile: (targetPosition: Coordinates) => void;
+  missilesInFlight: MissileInFlight[];
 }
 
-const initialState: GameState & { selectedBase: Base | null; deployment: DeploymentState; homeCountryId: string | null; occupiedCountryIds: string[] } = {
+const initialState: GameState & { 
+  selectedBase: Base | null; 
+  deployment: DeploymentState; 
+  homeCountryId: string | null; 
+  occupiedCountryIds: string[];
+  struckCountryIds: string[];
+  missileTargeting: MissileTargetingState;
+  missilesInFlight: MissileInFlight[];
+} = {
   tick: 0,
   speed: 1,
   playerFaction: 'player',
@@ -65,6 +97,14 @@ const initialState: GameState & { selectedBase: Base | null; deployment: Deploym
   },
   homeCountryId: null,
   occupiedCountryIds: [],
+  struckCountryIds: [],
+  missileTargeting: {
+    isActive: false,
+    baseId: null,
+    missileType: null,
+    targetPosition: null,
+  },
+  missilesInFlight: [],
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -256,6 +296,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deployment: { isActive: false, selectedUnitIds: [] },
     });
     get().addLog('info', 'Deployment cancelled');
+  },
+
+  startMissileTargeting: (baseId, missileType) => {
+    set({
+      missileTargeting: { isActive: true, baseId, missileType, targetPosition: null },
+      selectedTool: null,
+    });
+  },
+
+  cancelMissileTargeting: () => {
+    set({
+      missileTargeting: { isActive: false, baseId: null, missileType: null, targetPosition: null },
+    });
+    get().addLog('info', 'Missile targeting cancelled');
+  },
+
+  fireMissile: (targetPosition) => {
+    const state = get();
+    const { missileTargeting, bases } = state;
+    
+    if (!missileTargeting.isActive || !missileTargeting.baseId || !missileTargeting.missileType) {
+      return;
+    }
+
+    const base = bases.find(b => b.id === missileTargeting.baseId);
+    if (!base) return;
+
+    const template = MISSILE_TEMPLATES[missileTargeting.missileType];
+    if (state.resources < template.cost) {
+      get().addLog('warning', `Insufficient resources for ${template.name}`);
+      return;
+    }
+
+    // Find target country
+    const targetCountry = findCountryAtPosition(targetPosition.latitude, targetPosition.longitude);
+    
+    // Create missile in flight
+    const missile: MissileInFlight = {
+      id: uuidv4(),
+      startPosition: base.position,
+      targetPosition,
+      missileType: missileTargeting.missileType,
+      launchTick: state.tick,
+      arrivalTick: state.tick + template.flightTime * 10, // Convert to ticks
+    };
+
+    // Immediately mark country as struck (red)
+    const newStruckCountries = [...state.struckCountryIds];
+    if (targetCountry && !newStruckCountries.includes(targetCountry.id)) {
+      newStruckCountries.push(targetCountry.id);
+    }
+
+    set({
+      resources: state.resources - template.cost,
+      missilesInFlight: [...state.missilesInFlight, missile],
+      struckCountryIds: newStruckCountries,
+      missileTargeting: { isActive: false, baseId: null, missileType: null, targetPosition: null },
+      selectedBase: null,
+    });
+
+    const countryName = targetCountry ? targetCountry.name : 'target location';
+    get().addLog('combat', `🚀 ${template.name} launched at ${countryName}!`, targetPosition);
   },
 
   addLog: (type, message, position) => {

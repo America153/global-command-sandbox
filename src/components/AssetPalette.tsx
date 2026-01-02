@@ -6,7 +6,8 @@ import {
   Shield, 
   Eye, 
   Crosshair,
-  Users
+  Users,
+  Rocket
 } from 'lucide-react';
 import type { BaseType } from '@/types/game';
 
@@ -19,6 +20,7 @@ export default function AssetPalette() {
     { type: 'navy', label: 'Navy', icon: <Ship className="w-5 h-5" />, cost: 600 },
     { type: 'airforce', label: 'Air', icon: <Plane className="w-5 h-5" />, cost: 700 },
     { type: 'intelligence', label: 'Intel', icon: <Eye className="w-5 h-5" />, cost: 400 },
+    { type: 'missile', label: 'Missile', icon: <Rocket className="w-5 h-5" />, cost: 800 },
   ];
 
   const isSelected = (type: BaseType) => {
