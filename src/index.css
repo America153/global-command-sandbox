@@ -137,14 +137,7 @@
 
   .scanline::after {
     content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.3), transparent);
-    opacity: 0.35;
-    animation: none;
+    display: none;
   }
 
   @keyframes scanline {
@@ -253,5 +246,12 @@
 
   .border-neutral {
     border-color: hsl(var(--neutral));
+  }
+
+  /* Disable blinking/pulsing utilities (per user preference) */
+  .animate-pulse,
+  .animate-blink,
+  .animate-caret-blink {
+    animation: none !important;
   }
 }
