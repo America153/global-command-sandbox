@@ -96,7 +96,7 @@ export default function AssetPalette() {
           <ul className="text-[10px] text-muted-foreground space-y-1 font-mono">
             {!hq && (
               <li className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-accent rounded-full animate-blink" />
+                <span className="w-1 h-1 bg-accent rounded-full" />
                 Select HQ and click globe to place
               </li>
             )}

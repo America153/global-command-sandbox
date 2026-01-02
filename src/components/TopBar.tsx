@@ -26,16 +26,16 @@ export default function TopBar({ selectedTool }: TopBarProps) {
         <div className="flex items-center gap-6">
           {selectedTool && (
             <div className="flex items-center gap-2 px-3 py-1 bg-primary/20 rounded border border-primary/50">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs font-mono text-primary">
+              <div className="w-2 h-2 rounded-full bg-primary" />
+              <span className="text-[10px] font-mono text-primary">
                 {selectedTool === 'hq' ? 'PLACING HQ' : `PLACING ${selectedTool.toUpperCase()}`}
               </span>
             </div>
           )}
           
           {!selectedTool && !hq && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-accent/20 rounded border border-accent/50 animate-pulse">
-              <span className="text-xs font-mono text-accent">
+            <div className="flex items-center gap-2 px-3 py-1 bg-accent/20 rounded border border-accent/50">
+              <span className="text-[10px] font-mono text-accent">
                 SELECT HQ FROM PALETTE → CLICK GLOBE
               </span>
             </div>

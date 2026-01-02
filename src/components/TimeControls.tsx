@@ -90,8 +90,8 @@ export default function TimeControls() {
 
         {/* Status Indicator */}
         <div className="ml-auto flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${speed > 0 && hq ? 'bg-friendly animate-pulse' : 'bg-muted-foreground'}`} />
-          <span className="text-xs font-mono text-muted-foreground">
+          <div className={`w-2 h-2 rounded-full ${speed > 0 && hq ? 'bg-friendly' : 'bg-muted-foreground'}`} />
+          <span className="text-[10px] font-mono text-muted-foreground">
             {!hq ? 'AWAITING HQ' : speed === 0 ? 'PAUSED' : 'RUNNING'}
           </span>
         </div>
