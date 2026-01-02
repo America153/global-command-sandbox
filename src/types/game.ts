@@ -105,7 +105,7 @@ export type PlacementTool =
 export interface GameLog {
   id: string;
   timestamp: number;
-  type: 'info' | 'warning' | 'combat' | 'intel' | 'production';
+  type: 'info' | 'warning' | 'combat' | 'intel' | 'production' | 'movement';
   message: string;
   position?: Coordinates;
 }
