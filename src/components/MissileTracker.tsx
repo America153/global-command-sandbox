@@ -1,8 +1,9 @@
+import { forwardRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Rocket, Target } from 'lucide-react';
 import { MISSILE_TEMPLATES } from '@/types/game';
 
-export default function MissileTracker() {
+const MissileTracker = forwardRef<HTMLDivElement>(function MissileTracker(_, ref) {
   const { missilesInFlight, tick } = useGameStore();
 
   if (missilesInFlight.length === 0) return null;
@@ -64,4 +65,6 @@ export default function MissileTracker() {
       </div>
     </div>
   );
-}
+});
+
+export default MissileTracker;

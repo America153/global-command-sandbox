@@ -1,7 +1,8 @@
+import { forwardRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { X, Navigation, AlertCircle } from 'lucide-react';
 
-export default function DeploymentPanel() {
+const DeploymentPanel = forwardRef<HTMLDivElement>(function DeploymentPanel(_, ref) {
   const { deployment, cancelDeployment, units } = useGameStore();
 
   if (!deployment.isActive) return null;
@@ -61,4 +62,6 @@ export default function DeploymentPanel() {
       </div>
     </div>
   );
-}
+});
+
+export default DeploymentPanel;
