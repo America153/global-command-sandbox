@@ -5,6 +5,7 @@ import type { Unit, Base, Coordinates } from '@/types/game';
 import { UNIT_TEMPLATES } from '@/types/game';
 import { calculateDistance } from './simulation';
 import type { DiplomaticStatus } from './diplomacy';
+import { findCountryAtPosition } from '@/data/countries';
 
 export interface RetaliationAction {
   type: 'unit_attack' | 'missile_strike' | 'reinforce';
@@ -189,6 +190,43 @@ export function generateReinforcements(
   return units;
 }
 
+// Generate a raid force to attack player territory
+export function generateRaidForce(
+  sourceBase: Base,
+  targetPosition: Coordinates,
+  currentTick: number,
+  existingUnitCount: number
+): Unit[] {
+  const units: Unit[] = [];
+  
+  // Raid with 2-5 units
+  const raidSize = 2 + Math.floor(Math.random() * 4);
+  
+  const raidUnitTypes: (keyof typeof UNIT_TEMPLATES)[] = ['infantry', 'armor', 'fighter', 'helicopter', 'special_forces'];
+  
+  for (let i = 0; i < raidSize; i++) {
+    const unitType = raidUnitTypes[Math.floor(Math.random() * raidUnitTypes.length)];
+    
+    const unit: Unit = {
+      id: uuidv4(),
+      templateType: unitType,
+      name: `Enemy Raider ${existingUnitCount + i + 1}`,
+      position: { ...sourceBase.position },
+      destination: targetPosition,
+      faction: 'ai',
+      health: 100,
+      maxHealth: 100,
+      status: 'moving',
+      parentBaseId: sourceBase.id,
+      createdAt: currentTick,
+    };
+    
+    units.push(unit);
+  }
+  
+  return units;
+}
+
 // Process AI retaliation for one tick
 export function processRetaliation(
   aiUnits: Unit[],
@@ -198,19 +236,22 @@ export function processRetaliation(
   diplomaticStatus: DiplomaticStatus,
   alertLevel: string,
   ticksSinceLastRetaliation: number,
-  currentTick: number
+  currentTick: number,
+  homeCountryId?: string | null
 ): {
   movedUnits: Unit[];
   reinforcements: Unit[];
+  raidForce: Unit[];
   logs: string[];
 } {
   const logs: string[] = [];
   let movedUnits: Unit[] = [];
   let reinforcements: Unit[] = [];
+  let raidForce: Unit[] = [];
 
   // Check if AI should take action
   if (!shouldRetaliate(diplomaticStatus, alertLevel, ticksSinceLastRetaliation)) {
-    return { movedUnits: [], reinforcements: [], logs: [] };
+    return { movedUnits: [], reinforcements: [], raidForce: [], logs: [] };
   }
 
   // Move units toward player
@@ -235,5 +276,37 @@ export function processRetaliation(
     }
   }
 
-  return { movedUnits, reinforcements, logs };
+  // RAID MECHANIC: Chance to launch raids on player home territory
+  if ((diplomaticStatus === 'war' || alertLevel === 'war') && playerBases.length > 0 && aiBases.length > 0) {
+    // 15% chance per tick to launch a raid when at war
+    const raidChance = alertLevel === 'war' ? 0.15 : 0.08;
+    if (Math.random() < raidChance) {
+      // Pick a random player base to raid
+      const targetBase = playerBases[Math.floor(Math.random() * playerBases.length)];
+      
+      // Find nearest AI base to launch from
+      let nearestAIBase: Base | null = null;
+      let nearestDistance = Infinity;
+      
+      for (const aiBase of aiBases) {
+        const dist = calculateDistance(aiBase.position, targetBase.position);
+        if (dist < nearestDistance) {
+          nearestDistance = dist;
+          nearestAIBase = aiBase;
+        }
+      }
+      
+      if (nearestAIBase && nearestDistance < 2000) { // Within 2000km
+        raidForce = generateRaidForce(nearestAIBase, targetBase.position, currentTick, aiUnits.length);
+        
+        // Find target country name
+        const targetCountry = findCountryAtPosition(targetBase.position.latitude, targetBase.position.longitude);
+        const targetName = targetCountry ? targetCountry.name : 'your territory';
+        
+        logs.push(`🔴 ENEMY RAID INCOMING! ${raidForce.length} hostile units launched toward ${targetName}!`);
+      }
+    }
+  }
+
+  return { movedUnits, reinforcements, raidForce, logs };
 }
