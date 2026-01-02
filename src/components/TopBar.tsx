@@ -1,21 +1,27 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { Target, Handshake, DollarSign } from 'lucide-react';
+import { Target, Handshake, DollarSign, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DiplomacyPanel from '@/components/DiplomacyPanel';
 import FinancePanel from '@/components/FinancePanel';
+import StockMarketPanel from '@/components/StockMarketPanel';
 
 interface TopBarProps {
   selectedTool: string | null;
 }
 
 export default function TopBar({ selectedTool }: TopBarProps) {
-  const { resources, hq, diplomacy, loans } = useGameStore();
+  const { resources, hq, diplomacy, loans, portfolio, stocks } = useGameStore();
   const [showDiplomacy, setShowDiplomacy] = useState(false);
   const [showFinance, setShowFinance] = useState(false);
+  const [showStocks, setShowStocks] = useState(false);
 
   const atWarCount = Object.values(diplomacy.relations).filter(r => r.status === 'war').length;
   const totalDebt = loans.reduce((sum, loan) => sum + loan.remaining, 0);
+  const portfolioValue = Object.entries(portfolio).reduce((sum, [stockId, shares]) => {
+    const stock = stocks.find(s => s.id === stockId);
+    return sum + (stock ? stock.price * (shares as number) : 0);
+  }, 0);
 
   return (
     <>
@@ -50,6 +56,22 @@ export default function TopBar({ selectedTool }: TopBarProps) {
                 </span>
               </div>
             )}
+
+            {/* Stock Market Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => setShowStocks(true)}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span className="text-xs">Stocks</span>
+              {portfolioValue > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-friendly/20 text-friendly rounded">
+                  ${(portfolioValue / 1000000).toFixed(1)}M
+                </span>
+              )}
+            </Button>
 
             {/* Finance Button */}
             <Button 
@@ -106,6 +128,9 @@ export default function TopBar({ selectedTool }: TopBarProps) {
       
       {/* Finance Panel Modal */}
       {showFinance && <FinancePanel onClose={() => setShowFinance(false)} />}
+      
+      {/* Stock Market Panel Modal */}
+      {showStocks && <StockMarketPanel onClose={() => setShowStocks(false)} />}
     </>
   );
 }

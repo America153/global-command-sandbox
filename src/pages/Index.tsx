@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { loadCountries } from '@/data/countries';
 import AssetPalette from '@/components/AssetPalette';
@@ -9,6 +9,8 @@ import Globe from '@/components/Globe';
 import BaseDetailsPanel from '@/components/BaseDetailsPanel';
 import DeploymentPanel from '@/components/DeploymentPanel';
 import MissileTracker from '@/components/MissileTracker';
+import UnitContextMenu from '@/components/UnitContextMenu';
+import type { Unit } from '@/types/game';
 
 export default function Index() {
   useEffect(() => {
@@ -16,10 +18,17 @@ export default function Index() {
     void loadCountries();
   }, []);
 
-  const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile } = useGameStore();
+  const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile, selectedUnit, selectUnit } = useGameStore();
+  const [unitMenuPosition, setUnitMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
   const handleGlobeClick = useCallback((lat: number, lng: number) => {
     const position = { latitude: lat, longitude: lng };
+
+    // Close unit context menu on globe click
+    if (selectedUnit) {
+      selectUnit(null);
+      setUnitMenuPosition(null);
+    }
 
     // Handle missile targeting mode first
     if (missileTargeting.isActive) {
@@ -43,7 +52,19 @@ export default function Index() {
     } else if (selectedTool.type === 'base') {
       placeBase(selectedTool.baseType!, position);
     }
-  }, [selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile]);
+  }, [selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile, selectedUnit, selectUnit]);
+
+  const handleUnitClick = useCallback((unit: Unit, screenPosition: { x: number; y: number }) => {
+    if (unit.faction === 'player') {
+      selectUnit(unit);
+      setUnitMenuPosition(screenPosition);
+    }
+  }, [selectUnit]);
+
+  const handleCloseUnitMenu = useCallback(() => {
+    selectUnit(null);
+    setUnitMenuPosition(null);
+  }, [selectUnit]);
 
   const getSelectedToolLabel = () => {
     if (!selectedTool) return null;
@@ -64,7 +85,7 @@ export default function Index() {
 
         {/* Center - Globe */}
         <div className="flex-1 relative">
-          <Globe onGlobeClick={handleGlobeClick} />
+          <Globe onGlobeClick={handleGlobeClick} onUnitClick={handleUnitClick} />
           
           {/* Base Details Panel */}
           <BaseDetailsPanel />
@@ -74,6 +95,15 @@ export default function Index() {
           
           {/* Missile Tracker */}
           <MissileTracker />
+          
+          {/* Unit Context Menu */}
+          {selectedUnit && unitMenuPosition && (
+            <UnitContextMenu 
+              unit={selectedUnit} 
+              screenPosition={unitMenuPosition} 
+              onClose={handleCloseUnitMenu} 
+            />
+          )}
           
           {/* Coordinate Overlay */}
           <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">

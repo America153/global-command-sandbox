@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GlobeGL from 'react-globe.gl';
 import { useGameStore } from '@/store/gameStore';
 import { MISSILE_TEMPLATES } from '@/types/game';
+import type { Unit } from '@/types/game';
 
 interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
+  onUnitClick?: (unit: Unit, screenPosition: { x: number; y: number }) => void;
 }
 
-export default function Globe({ onGlobeClick }: GlobeProps) {
+export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
   const globeRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -155,6 +157,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
       color: unit.faction === 'player' ? '#ffffff' : '#ff6666',
       size: 0.5,
+      unit: unit, // Store reference to the unit
     }));
   }, [units, visibleEnemyUnits]);
 
@@ -241,9 +244,12 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         labelAltitude={0.01}
         labelDotRadius={0.4}
         labelResolution={3}
-        onLabelClick={(label: any) => {
+        onLabelClick={(label: any, event: MouseEvent) => {
           if (label.base) {
             useGameStore.getState().selectBase(label.base);
+          } else if (label.unit && onUnitClick) {
+            // Get screen position from mouse event
+            onUnitClick(label.unit, { x: event.clientX, y: event.clientY });
           }
         }}
         onGlobeClick={handleGlobeClick}
