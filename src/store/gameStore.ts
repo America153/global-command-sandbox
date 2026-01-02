@@ -9,16 +9,16 @@ import type {
   Coordinates, 
   BaseType,
   UnitType,
-  TerritoryInfluence,
-  BASE_CONFIG,
-  UNIT_TEMPLATES
+  TerritoryInfluence
 } from '@/types/game';
+import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
 
 interface GameStore extends GameState {
   // Actions
   setSpeed: (speed: number) => void;
   selectTool: (tool: PlacementTool | null) => void;
   selectEntity: (id: string | null) => void;
+  selectBase: (base: Base | null) => void;
   placeHQ: (position: Coordinates) => void;
   placeBase: (type: BaseType, position: Coordinates) => void;
   produceUnit: (baseId: string, unitType: UnitType) => void;
@@ -27,9 +27,10 @@ interface GameStore extends GameState {
   runTick: () => void;
   resetGame: () => void;
   addResources: (amount: number) => void;
+  selectedBase: Base | null;
 }
 
-const initialState: GameState = {
+const initialState: GameState & { selectedBase: Base | null } = {
   tick: 0,
   speed: 1,
   playerFaction: 'player',
@@ -42,6 +43,7 @@ const initialState: GameState = {
   resources: 10000,
   selectedTool: null,
   selectedEntity: null,
+  selectedBase: null,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -49,9 +51,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setSpeed: (speed) => set({ speed }),
 
-  selectTool: (tool) => set({ selectedTool: tool, selectedEntity: null }),
+  selectTool: (tool) => set({ selectedTool: tool, selectedEntity: null, selectedBase: null }),
 
   selectEntity: (id) => set({ selectedEntity: id, selectedTool: null }),
+
+  selectBase: (base) => set({ selectedBase: base, selectedTool: null }),
 
   placeHQ: (position) => {
     const state = get();

@@ -1,10 +1,11 @@
-import { useCallback, Suspense, lazy } from 'react';
+import { useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import AssetPalette from '@/components/AssetPalette';
 import IntelPanel from '@/components/IntelPanel';
 import TimeControls from '@/components/TimeControls';
 import TopBar from '@/components/TopBar';
 import Globe from '@/components/Globe';
+import BaseDetailsPanel from '@/components/BaseDetailsPanel';
 
 export default function Index() {
   const { selectedTool, placeHQ, placeBase, addLog } = useGameStore();
@@ -20,7 +21,7 @@ export default function Index() {
     if (selectedTool.type === 'hq') {
       placeHQ(position);
     } else if (selectedTool.type === 'base') {
-      placeBase(selectedTool.baseType, position);
+      placeBase(selectedTool.baseType!, position);
     }
   }, [selectedTool, placeHQ, placeBase, addLog]);
 
@@ -44,6 +45,9 @@ export default function Index() {
         {/* Center - Globe */}
         <div className="flex-1 relative">
           <Globe onGlobeClick={handleGlobeClick} />
+          
+          {/* Base Details Panel */}
+          <BaseDetailsPanel />
           
           {/* Coordinate Overlay */}
           <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
