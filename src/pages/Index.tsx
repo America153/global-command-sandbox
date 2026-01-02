@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { loadCountries } from '@/data/countries';
 import AssetPalette from '@/components/AssetPalette';
 import IntelPanel from '@/components/IntelPanel';
 import TimeControls from '@/components/TimeControls';
@@ -9,6 +10,11 @@ import BaseDetailsPanel from '@/components/BaseDetailsPanel';
 import DeploymentPanel from '@/components/DeploymentPanel';
 
 export default function Index() {
+  useEffect(() => {
+    // Preload borders so HQ/occupation detection works immediately
+    void loadCountries();
+  }, []);
+
   const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits } = useGameStore();
 
   const handleGlobeClick = useCallback((lat: number, lng: number) => {
