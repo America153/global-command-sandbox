@@ -179,14 +179,14 @@
     background: radial-gradient(ellipse at center, hsl(var(--territory-friendly) / 0.3) 0%, transparent 70%);
   }
 
-  /* Pulse animation for active elements */
+  /* Disabled - no blinking animations */
   .pulse-tactical {
-    animation: pulse-tactical 2s ease-in-out infinite;
+    animation: none;
   }
 
   @keyframes pulse-tactical {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
 
   /* Grid overlay */
