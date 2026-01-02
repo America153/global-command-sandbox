@@ -24,6 +24,16 @@ import {
   getVisibleEnemyEntities
 } from '@/engine/aiEnemy';
 import { generateCountryDefenses, getCountryPower } from '@/engine/countryDefenders';
+import { processCombatTick } from '@/engine/combat';
+import { 
+  type DiplomacyState, 
+  type NationRelation,
+  createNationRelation, 
+  modifyOpinion, 
+  getOpinionChange,
+  getNationsAtWar 
+} from '@/engine/diplomacy';
+import { processRetaliation } from '@/engine/retaliation';
 
 interface DeploymentState {
   isActive: boolean;
@@ -63,6 +73,11 @@ const initialAIEnemyState: AIEnemyState = {
   lastReactionTick: 0,
 };
 
+// Initialize diplomacy state
+const initialDiplomacyState: DiplomacyState = {
+  relations: {},
+};
+
 interface GameStore extends GameState {
   // Actions
   setSpeed: (speed: number) => void;
@@ -98,6 +113,9 @@ interface GameStore extends GameState {
   aiEnemy: AIEnemyState;
   getVisibleEnemyBases: () => Base[];
   getVisibleEnemyUnits: () => Unit[];
+  // Diplomacy system
+  diplomacy: DiplomacyState;
+  lastRetaliationTick: number;
 }
 
 const initialState: GameState & { 
@@ -110,6 +128,8 @@ const initialState: GameState & {
   missilesInFlight: MissileInFlight[];
   explosions: Explosion[];
   aiEnemy: AIEnemyState;
+  diplomacy: DiplomacyState;
+  lastRetaliationTick: number;
 } = {
   tick: 0,
   speed: 1,
@@ -140,6 +160,8 @@ const initialState: GameState & {
   missilesInFlight: [],
   explosions: [],
   aiEnemy: initialAIEnemyState,
+  diplomacy: initialDiplomacyState,
+  lastRetaliationTick: 0,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -649,14 +671,86 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     }
 
+    // === COMBAT SYSTEM ===
+    const playerUnits = updatedUnits.filter(u => u.faction === 'player');
+    const combatResult = processCombatTick(
+      playerUnits,
+      state.bases,
+      updatedAIEnemy.units,
+      updatedAIEnemy.bases
+    );
+
+    // Log combat events
+    combatResult.combatLogs.forEach(log => get().addLog('combat', log));
+
+    // Update diplomacy for invaded countries
+    let updatedDiplomacy = { ...state.diplomacy };
+    for (const countryId of invadedCountryIds) {
+      if (!updatedDiplomacy.relations[countryId]) {
+        const country = findCountryAtPosition(0, 0); // Get country name from existing data
+        updatedDiplomacy.relations[countryId] = createNationRelation(countryId, `Nation ${countryId}`);
+      }
+      const result = modifyOpinion(
+        updatedDiplomacy.relations[countryId],
+        getOpinionChange('border_violation'),
+        'border violation'
+      );
+      updatedDiplomacy.relations[countryId] = result.relation;
+    }
+
+    // === ENEMY RETALIATION ===
+    const nationsAtWar = getNationsAtWar(updatedDiplomacy.relations);
+    const isAtWar = nationsAtWar.length > 0 || updatedAIEnemy.alertLevel === 'war';
+    let retaliationTick = state.lastRetaliationTick;
+
+    if (isAtWar) {
+      const retaliation = processRetaliation(
+        combatResult.updatedEnemyUnits,
+        combatResult.updatedEnemyBases,
+        combatResult.updatedPlayerUnits,
+        combatResult.updatedPlayerBases,
+        'war',
+        updatedAIEnemy.alertLevel,
+        currentTick - state.lastRetaliationTick,
+        currentTick
+      );
+
+      // Apply retaliation movements
+      if (retaliation.movedUnits.length > 0 || retaliation.reinforcements.length > 0) {
+        retaliationTick = currentTick;
+        retaliation.logs.forEach(log => get().addLog('intel', log));
+      }
+
+      updatedAIEnemy = {
+        ...updatedAIEnemy,
+        units: [
+          ...combatResult.updatedEnemyUnits.map(u => {
+            const moved = retaliation.movedUnits.find(m => m.id === u.id);
+            return moved || u;
+          }),
+          ...retaliation.reinforcements,
+        ],
+        bases: combatResult.updatedEnemyBases,
+      };
+    } else {
+      updatedAIEnemy = {
+        ...updatedAIEnemy,
+        units: combatResult.updatedEnemyUnits,
+        bases: combatResult.updatedEnemyBases,
+      };
+    }
+
     set({
       tick: currentTick,
       resources: state.resources + incomePerTick,
-      units: updatedUnits,
+      units: combatResult.updatedPlayerUnits,
+      bases: combatResult.updatedPlayerBases,
       occupiedCountryIds: Array.from(newOccupiedCountries),
       missilesInFlight: remainingMissiles,
       explosions: activeExplosions,
       aiEnemy: updatedAIEnemy,
+      diplomacy: updatedDiplomacy,
+      lastRetaliationTick: retaliationTick,
     });
   },
 
