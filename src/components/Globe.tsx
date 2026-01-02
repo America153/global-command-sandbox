@@ -8,42 +8,61 @@ interface GlobeProps {
 
 export default function Globe({ onGlobeClick }: GlobeProps) {
   const globeRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
   const { bases, units, territories } = useGameStore();
 
+  // Handle resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        setDimensions({
+          width: containerRef.current.offsetWidth,
+          height: containerRef.current.offsetHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    
+    // Small delay to ensure container is mounted
+    const timer = setTimeout(updateDimensions, 100);
+    
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      clearTimeout(timer);
+    };
+  }, []);
+
   // Load countries GeoJSON
   useEffect(() => {
-    fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+    fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
       .then(res => res.json())
-      .then(data => {
-        setCountriesData(data);
-        setIsLoaded(true);
+      .then(topology => {
+        import('topojson-client').then(topojson => {
+          const geojson = topojson.feature(topology, topology.objects.countries);
+          setCountriesData(geojson);
+          setIsLoaded(true);
+        });
       })
-      .catch(() => {
-        // Fallback to simpler dataset
-        fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
-          .then(res => res.json())
-          .then(topology => {
-            import('topojson-client').then(topojson => {
-              const geojson = topojson.feature(topology, topology.objects.countries);
-              setCountriesData(geojson);
-              setIsLoaded(true);
-            });
-          });
-      });
+      .catch(console.error);
   }, []);
 
   // Auto-rotate
   useEffect(() => {
-    if (!globeRef.current) return;
+    if (!globeRef.current || !isLoaded) return;
     
     const globe = globeRef.current;
-    globe.controls().autoRotate = true;
-    globe.controls().autoRotateSpeed = 0.3;
+    if (globe.controls) {
+      globe.controls().autoRotate = true;
+      globe.controls().autoRotateSpeed = 0.3;
+    }
     globe.pointOfView({ altitude: 2.5 });
-  }, [isLoaded]);
+  }, [isLoaded, dimensions]);
 
   const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null) => {
     if (coords) {
@@ -91,9 +110,9 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     color: getFactionColor(t.faction),
   }));
 
-  if (!isLoaded) {
+  if (!isLoaded || dimensions.width === 0) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center bg-background">
+      <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           <p className="text-muted-foreground font-mono text-sm">INITIALIZING BATTLESPACE...</p>
@@ -103,9 +122,11 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   }
 
   return (
-    <div className="relative w-full h-full bg-[#0a0f14]">
+    <div ref={containerRef} className="relative w-full h-full bg-[#0a0f14]">
       <GlobeGL
         ref={globeRef}
+        width={dimensions.width}
+        height={dimensions.height}
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-dark.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
         polygonsData={countriesData.features}
