@@ -47,6 +47,14 @@ interface MissileTargetingState {
   targetPosition: Coordinates | null;
 }
 
+interface Loan {
+  id: string;
+  principal: number;
+  remaining: number;
+  interestRate: number;
+  takenAtTick: number;
+}
+
 interface MissileInFlight {
   id: string;
   startPosition: Coordinates;
@@ -117,6 +125,10 @@ interface GameStore extends GameState {
   // Diplomacy system
   diplomacy: DiplomacyState;
   lastRetaliationTick: number;
+  // Finance system
+  loans: Loan[];
+  takeLoan: (amount: number) => void;
+  payLoan: (loanId: string, amount: number) => void;
 }
 
 const initialState: GameState & { 
@@ -132,6 +144,7 @@ const initialState: GameState & {
   aiEnemy: AIEnemyState;
   diplomacy: DiplomacyState;
   lastRetaliationTick: number;
+  loans: Loan[];
 } = {
   tick: 0,
   speed: 1,
@@ -154,6 +167,7 @@ const initialState: GameState & {
   occupiedCountryIds: [],
   capturedCountryIds: [],
   struckCountryIds: [],
+  loans: [],
   missileTargeting: {
     isActive: false,
     baseId: null,
@@ -463,15 +477,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (state.speed === 0) return;
 
-    // Generate passive income from HQ
-    let incomePerTick = state.hq ? 10 * state.speed : 0;
+    // Financial constants
+    const BASE_INCOME = 10000000; // $10M base income
+    const TERRITORY_INCOME_MULTIPLIER = 500000; // $500k per power level
+    const UNIT_UPKEEP = 10000; // $10k per unit
+    const BASE_UPKEEP = 100000; // $100k per base
+
+    // Generate passive income from HQ ($10M base)
+    let incomePerTick = state.hq ? BASE_INCOME * state.speed : 0;
     
     // Add income from captured territories based on country power
     for (const countryId of state.capturedCountryIds) {
       const countryPower = getCountryPower(countryId);
-      // More powerful countries generate more resources: power 1=5, power 5=50 per tick
-      incomePerTick += (5 + countryPower * 10) * state.speed;
+      incomePerTick += (countryPower * TERRITORY_INCOME_MULTIPLIER) * state.speed;
     }
+
+    // Calculate upkeep costs
+    const upkeepPlayerUnits = state.units.filter(u => u.faction === 'player');
+    const upkeepPlayerBases = state.bases.filter(b => b.faction === 'player');
+    const unitUpkeep = upkeepPlayerUnits.length * UNIT_UPKEEP * state.speed;
+    const baseUpkeep = upkeepPlayerBases.length * BASE_UPKEEP * state.speed;
+
+    // Calculate loan interest payments
+    let loanPayments = 0;
+    for (const loan of state.loans) {
+      loanPayments += loan.remaining * loan.interestRate * state.speed;
+    }
+
+    // Net income = income - upkeep - loan payments
+    const netIncome = incomePerTick - unitUpkeep - baseUpkeep - loanPayments;
 
     // Move units toward destinations and track country occupation
     const newOccupiedCountries = new Set(state.occupiedCountryIds);
@@ -793,7 +827,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({
       tick: currentTick,
-      resources: state.resources + incomePerTick,
+      resources: state.resources + netIncome,
       units: combatResult.updatedPlayerUnits,
       bases: combatResult.updatedPlayerBases,
       occupiedCountryIds: Array.from(newOccupiedCountries),
@@ -809,4 +843,37 @@ export const useGameStore = create<GameStore>((set, get) => ({
   resetGame: () => set({ ...initialState }),
 
   addResources: (amount) => set((state) => ({ resources: state.resources + amount })),
+
+  takeLoan: (amount) => {
+    const state = get();
+    const loan: Loan = {
+      id: uuidv4(),
+      principal: amount,
+      remaining: amount,
+      interestRate: 0.05,
+      takenAtTick: state.tick,
+    };
+    set({
+      loans: [...state.loans, loan],
+      resources: state.resources + amount,
+    });
+    get().addLog('info', `💰 Loan of $${amount.toLocaleString()} received`);
+  },
+
+  payLoan: (loanId, amount) => {
+    const state = get();
+    const loan = state.loans.find(l => l.id === loanId);
+    if (!loan || state.resources < amount) return;
+
+    const paymentAmount = Math.min(amount, loan.remaining);
+    const updatedLoans = state.loans
+      .map(l => l.id === loanId ? { ...l, remaining: l.remaining - paymentAmount } : l)
+      .filter(l => l.remaining > 0);
+
+    set({
+      loans: updatedLoans,
+      resources: state.resources - paymentAmount,
+    });
+    get().addLog('info', `💵 Paid $${paymentAmount.toLocaleString()} towards loan`);
+  },
 }));

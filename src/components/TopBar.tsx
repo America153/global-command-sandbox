@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { Target, Handshake } from 'lucide-react';
+import { Target, Handshake, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DiplomacyPanel from '@/components/DiplomacyPanel';
+import FinancePanel from '@/components/FinancePanel';
 
 interface TopBarProps {
   selectedTool: string | null;
 }
 
 export default function TopBar({ selectedTool }: TopBarProps) {
-  const { resources, hq, diplomacy } = useGameStore();
+  const { resources, hq, diplomacy, loans } = useGameStore();
   const [showDiplomacy, setShowDiplomacy] = useState(false);
+  const [showFinance, setShowFinance] = useState(false);
 
   const atWarCount = Object.values(diplomacy.relations).filter(r => r.status === 'war').length;
+  const totalDebt = loans.reduce((sum, loan) => sum + loan.remaining, 0);
 
   return (
     <>
@@ -47,6 +50,22 @@ export default function TopBar({ selectedTool }: TopBarProps) {
                 </span>
               </div>
             )}
+
+            {/* Finance Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => setShowFinance(true)}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span className="text-xs">Finance</span>
+              {totalDebt > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-accent text-accent-foreground rounded">
+                  DEBT
+                </span>
+              )}
+            </Button>
 
             {/* Diplomacy Button */}
             <Button 
@@ -84,6 +103,9 @@ export default function TopBar({ selectedTool }: TopBarProps) {
 
       {/* Diplomacy Panel Modal */}
       {showDiplomacy && <DiplomacyPanel onClose={() => setShowDiplomacy(false)} />}
+      
+      {/* Finance Panel Modal */}
+      {showFinance && <FinancePanel onClose={() => setShowFinance(false)} />}
     </>
   );
 }
