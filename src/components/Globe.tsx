@@ -14,7 +14,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions, getVisibleEnemyBases, getVisibleEnemyUnits } = useGameStore();
 
   // Handle resize
   useEffect(() => {
@@ -113,24 +113,34 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     }
   };
 
-  // Flat labels for bases (rendered on globe surface)
-  const baseLabels = useMemo(() => bases.map(base => ({
-    lat: base.position.latitude,
-    lng: base.position.longitude,
-    text: `${getBaseIcon(base.type)} ${base.name}`,
-    color: base.faction === 'player' ? '#22c55e' : base.faction === 'ai' ? '#ef4444' : '#6b7280',
-    size: base.type === 'hq' ? 1.2 : 0.8,
-    base,
-  })), [bases]);
+  // Get visible enemy entities
+  const visibleEnemyBases = useMemo(() => getVisibleEnemyBases(), [getVisibleEnemyBases]);
+  const visibleEnemyUnits = useMemo(() => getVisibleEnemyUnits(), [getVisibleEnemyUnits]);
 
-  // Flat labels for units - 2x size and white color
-  const unitLabels = useMemo(() => units.map(unit => ({
-    lat: unit.position.latitude,
-    lng: unit.position.longitude,
-    text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
-    color: '#ffffff',
-    size: 1.2,
-  })), [units]);
+  // Flat labels for player bases (rendered on globe surface)
+  const baseLabels = useMemo(() => {
+    const allBases = [...bases, ...visibleEnemyBases];
+    return allBases.map(base => ({
+      lat: base.position.latitude,
+      lng: base.position.longitude,
+      text: `${getBaseIcon(base.type)} ${base.name}`,
+      color: base.faction === 'player' ? '#22c55e' : '#ef4444',
+      size: base.type === 'hq' ? 1.2 : 0.8,
+      base,
+    }));
+  }, [bases, visibleEnemyBases]);
+
+  // Flat labels for units - player units always visible, enemy units only with intel
+  const unitLabels = useMemo(() => {
+    const allUnits = [...units, ...visibleEnemyUnits];
+    return allUnits.map(unit => ({
+      lat: unit.position.latitude,
+      lng: unit.position.longitude,
+      text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
+      color: unit.faction === 'player' ? '#ffffff' : '#ff6666',
+      size: 1.2,
+    }));
+  }, [units, visibleEnemyUnits]);
 
   const allLabels = useMemo(() => [...baseLabels, ...unitLabels], [baseLabels, unitLabels]);
 

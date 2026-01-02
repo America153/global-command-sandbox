@@ -10,8 +10,13 @@ import {
 import { useEffect, useRef } from 'react';
 
 export default function IntelPanel() {
-  const { logs, hq, bases, units, resources, tick } = useGameStore();
+  const { logs, hq, bases, units, resources, tick, aiEnemy, getVisibleEnemyBases, getVisibleEnemyUnits } = useGameStore();
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Check if player has intel capability
+  const hasIntelBase = bases.some(b => b.type === 'intelligence');
+  const visibleEnemyBases = getVisibleEnemyBases();
+  const visibleEnemyUnits = getVisibleEnemyUnits();
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,10 +33,45 @@ export default function IntelPanel() {
     }
   };
 
+  const getAlertLevelColor = (level: string) => {
+    switch (level) {
+      case 'peace': return 'text-friendly';
+      case 'vigilant': return 'text-accent';
+      case 'hostile': return 'text-orange-500';
+      case 'war': return 'text-destructive';
+      default: return 'text-muted-foreground';
+    }
+  };
+
   return (
     <div className="tactical-panel w-72 flex flex-col h-full">
       <div className="tactical-header scanline">
         INTELLIGENCE FEED
+      </div>
+
+      {/* Enemy Intel Section */}
+      <div className="p-3 border-b border-border space-y-2 bg-destructive/5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase">Enemy Status</span>
+          <span className={`text-xs font-mono font-bold uppercase ${getAlertLevelColor(aiEnemy.alertLevel)}`}>
+            {aiEnemy.alertLevel}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="bg-destructive/10 rounded p-1.5">
+            <div className="text-xs font-mono text-destructive">{visibleEnemyBases.length}/{aiEnemy.bases.length}</div>
+            <div className="text-[9px] text-muted-foreground">BASES KNOWN</div>
+          </div>
+          <div className={`${hasIntelBase ? 'bg-primary/10' : 'bg-muted/20'} rounded p-1.5`}>
+            <div className={`text-xs font-mono ${hasIntelBase ? 'text-primary' : 'text-muted-foreground'}`}>
+              {hasIntelBase ? visibleEnemyUnits.length : '???'}
+            </div>
+            <div className="text-[9px] text-muted-foreground">
+              {hasIntelBase ? 'UNITS TRACKED' : 'NEED INTEL BASE'}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Status Overview */}
