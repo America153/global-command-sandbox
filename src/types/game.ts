@@ -145,7 +145,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Infantry Battalion',
     symbol: 'INF',
-    speed: 300, // 30 * 10
+    speed: 1000,
     range: 500,
     attack: 40,
     defense: 50,
@@ -158,7 +158,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Armored Division',
     symbol: 'ARM',
-    speed: 600, // 60 * 10
+    speed: 1000,
     range: 400,
     attack: 80,
     defense: 70,
@@ -171,7 +171,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Artillery Battery',
     symbol: 'ART',
-    speed: 250, // 25 * 10
+    speed: 1000,
     range: 50,
     attack: 90,
     defense: 20,
@@ -184,7 +184,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Air Defense System',
     symbol: 'ADA',
-    speed: 400, // 40 * 10
+    speed: 1000,
     range: 200,
     attack: 70,
     defense: 40,
@@ -197,7 +197,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Engineer Corps',
     symbol: 'ENG',
-    speed: 350, // 35 * 10
+    speed: 1000,
     range: 300,
     attack: 20,
     defense: 30,
@@ -343,7 +343,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'special',
     name: 'Special Forces Team',
     symbol: 'SOF',
-    speed: 500, // 50 * 10
+    speed: 1000,
     range: 2000,
     attack: 70,
     defense: 40,
@@ -369,7 +369,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'special',
     name: 'Intelligence Cell',
     symbol: 'INT',
-    speed: 400, // 40 * 10
+    speed: 1000,
     range: 3000,
     attack: 10,
     defense: 30,
