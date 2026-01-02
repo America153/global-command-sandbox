@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GlobeGL from 'react-globe.gl';
 import { useGameStore } from '@/store/gameStore';
-import { findCountryAtPosition } from '@/data/countries';
 
 interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
@@ -78,17 +77,18 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
   // Get country color based on control
   const getPolygonColor = useCallback((feature: any) => {
-    const countryId = feature.id || feature.properties?.id;
-    
-    if (countryId && homeCountryId && countryId === homeCountryId) {
-      return 'rgba(59, 130, 246, 0.6)'; // Blue for home country
+    const rawId = feature?.id ?? feature?.properties?.id;
+    const countryId = rawId != null ? String(rawId) : null;
+
+    if (countryId && homeCountryId && countryId === String(homeCountryId)) {
+      return 'hsl(217 91% 60% / 0.55)'; // Blue for HQ country
     }
-    
+
     if (countryId && occupiedCountryIds.includes(countryId)) {
-      return 'rgba(239, 68, 68, 0.6)'; // Red for occupied
+      return 'hsl(0 84% 60% / 0.55)'; // Red for crossed/occupied
     }
-    
-    return 'rgba(30, 40, 55, 0.8)'; // Default dark
+
+    return 'hsl(215 28% 17% / 0.85)'; // Default dark
   }, [homeCountryId, occupiedCountryIds]);
 
   // Prepare points data for bases and units
