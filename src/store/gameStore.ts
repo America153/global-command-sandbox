@@ -40,7 +40,7 @@ const initialState: GameState & { selectedBase: Base | null } = {
   territories: [],
   nations: [],
   logs: [],
-  resources: 10000,
+  resources: 1000000000000,
   selectedTool: null,
   selectedEntity: null,
   selectedBase: null,

@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
-import type { UnitType, BaseType } from '@/types/game';
-import { X, Play, Users, Crosshair, Shield, Ship, Plane, Eye } from 'lucide-react';
+import type { UnitType, BaseType, Unit } from '@/types/game';
+import { X, Users, Crosshair, Shield, Ship, Plane, Eye, CheckSquare, Square } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-
+import { toast } from 'sonner';
 // Map base types to allowed unit types
 const ALLOWED_UNITS: Record<BaseType, UnitType[]> = {
   hq: ['infantry', 'armor', 'engineer', 'intel_team'],
@@ -14,13 +15,45 @@ const ALLOWED_UNITS: Record<BaseType, UnitType[]> = {
 };
 
 export default function BaseDetailsPanel() {
-  const { selectedBase, selectBase, produceUnit, resources, units } = useGameStore();
+  const { selectedBase, selectBase, produceUnit, resources, units, addLog } = useGameStore();
+  const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
 
   if (!selectedBase) return null;
 
   const baseDef = BASE_CONFIG[selectedBase.type];
   const stationedUnits = units.filter(u => u.parentBaseId === selectedBase.id);
   const allowedUnits = ALLOWED_UNITS[selectedBase.type] || [];
+
+  const toggleUnitSelection = (unitId: string) => {
+    setSelectedUnits(prev => {
+      const next = new Set(prev);
+      if (next.has(unitId)) {
+        next.delete(unitId);
+      } else {
+        next.add(unitId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllUnits = () => {
+    setSelectedUnits(new Set(stationedUnits.map(u => u.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedUnits(new Set());
+  };
+
+  const createTaskForce = () => {
+    if (selectedUnits.size === 0) {
+      toast.error('Select at least one unit to create a task force');
+      return;
+    }
+    const taskForceName = `Task Force ${Math.floor(Math.random() * 900) + 100}`;
+    addLog('combat', `${taskForceName} created with ${selectedUnits.size} units at ${selectedBase.name}`);
+    toast.success(`${taskForceName} created with ${selectedUnits.size} units`);
+    setSelectedUnits(new Set());
+  };
 
   const getBaseIcon = () => {
     switch (selectedBase.type) {
@@ -71,21 +104,34 @@ export default function BaseDetailsPanel() {
         {/* Stationed Units */}
         {stationedUnits.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Users className="w-3 h-3" />
-              Stationed Units ({stationedUnits.length})
-            </h4>
-            <div className="flex flex-wrap gap-1">
-              {stationedUnits.slice(0, 10).map((unit) => (
-                <span key={unit.id} className="px-2 py-1 bg-muted/30 rounded text-xs font-mono">
-                  {unit.templateType}
-                </span>
-              ))}
-              {stationedUnits.length > 10 && (
-                <span className="px-2 py-1 bg-muted/30 rounded text-xs font-mono text-muted-foreground">
-                  +{stationedUnits.length - 10} more
-                </span>
-              )}
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Users className="w-3 h-3" />
+                Stationed Units ({stationedUnits.length})
+              </h4>
+              <div className="flex gap-2 text-xs">
+                <button onClick={selectAllUnits} className="text-primary hover:underline">Select All</button>
+                <button onClick={clearSelection} className="text-muted-foreground hover:underline">Clear</button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+              {stationedUnits.map((unit) => {
+                const isSelected = selectedUnits.has(unit.id);
+                return (
+                  <button
+                    key={unit.id}
+                    onClick={() => toggleUnitSelection(unit.id)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-mono transition-colors ${
+                      isSelected 
+                        ? 'bg-primary/30 border border-primary' 
+                        : 'bg-muted/30 border border-transparent hover:border-muted-foreground/50'
+                    }`}
+                  >
+                    {isSelected ? <CheckSquare className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+                    {unit.templateType}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -122,17 +168,22 @@ export default function BaseDetailsPanel() {
           </div>
         </div>
 
-        {/* Create Task Force (placeholder) */}
-        <div className="pt-2 border-t border-border">
-          <button
-            className="w-full py-2 px-4 bg-primary/20 border border-primary text-primary rounded font-mono text-sm hover:bg-primary/30 transition-colors"
-            onClick={() => {
-              useGameStore.getState().addLog('info', 'Task Force creation coming soon!');
-            }}
-          >
-            CREATE TASK FORCE
-          </button>
-        </div>
+        {/* Create Task Force */}
+        {stationedUnits.length > 0 && (
+          <div className="pt-2 border-t border-border">
+            <button
+              className={`w-full py-2 px-4 rounded font-mono text-sm transition-colors ${
+                selectedUnits.size > 0
+                  ? 'bg-primary/20 border border-primary text-primary hover:bg-primary/30'
+                  : 'bg-muted/20 border border-muted text-muted-foreground cursor-not-allowed'
+              }`}
+              onClick={createTaskForce}
+              disabled={selectedUnits.size === 0}
+            >
+              CREATE TASK FORCE {selectedUnits.size > 0 && `(${selectedUnits.size} units)`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
