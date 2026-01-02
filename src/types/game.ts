@@ -139,13 +139,13 @@ export interface AIDecision {
 
 // Unit templates database
 export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
-  // Land units - 3x speed boost
+  // Land units - 10x speed boost
   infantry: {
     type: 'infantry',
     domain: 'land',
     name: 'Infantry Battalion',
     symbol: 'INF',
-    speed: 90, // 30 * 3
+    speed: 300, // 30 * 10
     range: 500,
     attack: 40,
     defense: 50,
@@ -158,7 +158,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Armored Division',
     symbol: 'ARM',
-    speed: 180, // 60 * 3
+    speed: 600, // 60 * 10
     range: 400,
     attack: 80,
     defense: 70,
@@ -171,7 +171,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Artillery Battery',
     symbol: 'ART',
-    speed: 75, // 25 * 3
+    speed: 250, // 25 * 10
     range: 50,
     attack: 90,
     defense: 20,
@@ -184,7 +184,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Air Defense System',
     symbol: 'ADA',
-    speed: 120, // 40 * 3
+    speed: 400, // 40 * 10
     range: 200,
     attack: 70,
     defense: 40,
@@ -197,7 +197,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Engineer Corps',
     symbol: 'ENG',
-    speed: 105, // 35 * 3
+    speed: 350, // 35 * 10
     range: 300,
     attack: 20,
     defense: 30,
@@ -337,13 +337,13 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     productionTime: 7,
     requiredBase: ['navy'],
   },
-  // Special units - 3x speed boost for land-based
+  // Special units - 10x speed boost for land-based
   special_forces: {
     type: 'special_forces',
     domain: 'special',
     name: 'Special Forces Team',
     symbol: 'SOF',
-    speed: 150, // 50 * 3
+    speed: 500, // 50 * 10
     range: 2000,
     attack: 70,
     defense: 40,
@@ -369,7 +369,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'special',
     name: 'Intelligence Cell',
     symbol: 'INT',
-    speed: 120, // 40 * 3
+    speed: 400, // 40 * 10
     range: 3000,
     attack: 10,
     defense: 30,
