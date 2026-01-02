@@ -14,7 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_actions: {
+        Row: {
+          action_type: string
+          executed_at: string
+          id: string
+          message: string | null
+          metadata: Json | null
+          session_id: string
+          target_latitude: number | null
+          target_longitude: number | null
+        }
+        Insert: {
+          action_type: string
+          executed_at?: string
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          session_id: string
+          target_latitude?: number | null
+          target_longitude?: number | null
+        }
+        Update: {
+          action_type?: string
+          executed_at?: string
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          session_id?: string
+          target_latitude?: number | null
+          target_longitude?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_actions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enemy_bases: {
+        Row: {
+          base_type: string
+          country_id: string | null
+          created_at: string
+          health: number
+          id: string
+          is_destroyed: boolean
+          is_revealed: boolean
+          latitude: number
+          longitude: number
+          max_health: number
+          name: string
+          session_id: string
+        }
+        Insert: {
+          base_type: string
+          country_id?: string | null
+          created_at?: string
+          health?: number
+          id?: string
+          is_destroyed?: boolean
+          is_revealed?: boolean
+          latitude: number
+          longitude: number
+          max_health?: number
+          name: string
+          session_id: string
+        }
+        Update: {
+          base_type?: string
+          country_id?: string | null
+          created_at?: string
+          health?: number
+          id?: string
+          is_destroyed?: boolean
+          is_revealed?: boolean
+          latitude?: number
+          longitude?: number
+          max_health?: number
+          name?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enemy_bases_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enemy_units: {
+        Row: {
+          base_id: string | null
+          created_at: string
+          health: number
+          id: string
+          is_destroyed: boolean
+          latitude: number
+          longitude: number
+          max_health: number
+          name: string
+          session_id: string
+          status: string
+          target_latitude: number | null
+          target_longitude: number | null
+          unit_type: string
+        }
+        Insert: {
+          base_id?: string | null
+          created_at?: string
+          health?: number
+          id?: string
+          is_destroyed?: boolean
+          latitude: number
+          longitude: number
+          max_health?: number
+          name: string
+          session_id: string
+          status?: string
+          target_latitude?: number | null
+          target_longitude?: number | null
+          unit_type: string
+        }
+        Update: {
+          base_id?: string | null
+          created_at?: string
+          health?: number
+          id?: string
+          is_destroyed?: boolean
+          latitude?: number
+          longitude?: number
+          max_health?: number
+          name?: string
+          session_id?: string
+          status?: string
+          target_latitude?: number | null
+          target_longitude?: number | null
+          unit_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enemy_units_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "enemy_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enemy_units_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_sessions: {
+        Row: {
+          alert_level: string
+          captured_countries: string[] | null
+          created_at: string
+          id: string
+          is_active: boolean
+          last_tick: number
+          player_id: string
+          resources: number
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          alert_level?: string
+          captured_countries?: string[] | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_tick?: number
+          player_id: string
+          resources?: number
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          alert_level?: string
+          captured_countries?: string[] | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_tick?: number
+          player_id?: string
+          resources?: number
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
