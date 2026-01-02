@@ -1,3 +1,4 @@
+import { forwardRef, useEffect, useRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { 
   AlertTriangle, 
@@ -7,9 +8,8 @@ import {
   Radio,
   Navigation
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 
-export default function IntelPanel() {
+const IntelPanel = forwardRef<HTMLDivElement>(function IntelPanel(_, ref) {
   const { logs, hq, bases, units, resources, tick, aiEnemy } = useGameStore();
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -150,4 +150,6 @@ export default function IntelPanel() {
       </div>
     </div>
   );
-}
+});
+
+export default IntelPanel;

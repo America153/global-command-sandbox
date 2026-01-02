@@ -1,5 +1,5 @@
+import { forwardRef, useEffect, useRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useEffect, useRef } from 'react';
 import { 
   Pause, 
   Play, 
@@ -8,7 +8,7 @@ import {
   Zap
 } from 'lucide-react';
 
-export default function TimeControls() {
+const TimeControls = forwardRef<HTMLDivElement>(function TimeControls(_, ref) {
   const { speed, setSpeed, runTick, resetGame, tick, hq } = useGameStore();
   const tickIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -98,4 +98,6 @@ export default function TimeControls() {
       </div>
     </div>
   );
-}
+});
+
+export default TimeControls;
