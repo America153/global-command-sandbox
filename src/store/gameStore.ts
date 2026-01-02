@@ -525,17 +525,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // === AI ENEMY REACTIONS ===
     let updatedAIEnemy = { ...state.aiEnemy };
 
-    // Check for border violations (player units near enemy bases)
+    // Check for border violations:
+    // 1) Country-based: if player units enter a country where enemy bases exist (matches "cross the border" expectation)
+    // 2) Distance-based fallback: if country data isn't loaded yet
     const borderCheck = checkBorderViolation(updatedUnits, updatedAIEnemy.bases);
-    
+
+    const enemyCountryIds = Array.from(
+      new Set(
+        updatedAIEnemy.bases
+          .map((b) => findCountryAtPosition(b.position.latitude, b.position.longitude)?.id)
+          .filter((id): id is string => !!id)
+      )
+    );
+
+    const borderViolationByCountry =
+      enemyCountryIds.length > 0
+        ? updatedUnits.some((u) => {
+            if (u.faction !== 'player') return false;
+            const c = findCountryAtPosition(u.position.latitude, u.position.longitude);
+            return !!c?.id && enemyCountryIds.includes(c.id);
+          })
+        : false;
+
+    const borderViolation = borderCheck.violated || borderViolationByCountry;
+
     // Check for missile strikes on enemy bases
-    const explosionPositions = newExplosions.map(e => e.position);
+    const explosionPositions = newExplosions.map((e) => e.position);
     const struckBases = checkMissileStrikes(explosionPositions, updatedAIEnemy.bases);
 
     // Calculate AI reactions
     const reactions = calculateAIReaction(
       updatedAIEnemy,
-      borderCheck.violated,
+      borderViolation,
       struckBases,
       currentTick
     );
