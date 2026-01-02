@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { Target, Handshake, DollarSign, BarChart3 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Target, Handshake, DollarSign, BarChart3, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DiplomacyPanel from '@/components/DiplomacyPanel';
 import FinancePanel from '@/components/FinancePanel';
@@ -12,6 +13,7 @@ interface TopBarProps {
 
 export default function TopBar({ selectedTool }: TopBarProps) {
   const { resources, hq, diplomacy, loans, portfolio, stocks } = useGameStore();
+  const { signOut, user } = useAuth();
   const [showDiplomacy, setShowDiplomacy] = useState(false);
   const [showFinance, setShowFinance] = useState(false);
   const [showStocks, setShowStocks] = useState(false);
@@ -119,6 +121,17 @@ export default function TopBar({ selectedTool }: TopBarProps) {
                 HQ ONLINE
               </div>
             )}
+
+            {/* Sign Out */}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="gap-2 text-muted-foreground hover:text-destructive"
+              onClick={() => signOut()}
+              title={user?.email || 'Sign out'}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </div>
