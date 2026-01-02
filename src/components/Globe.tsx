@@ -93,25 +93,38 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     return 'hsla(215, 28%, 17%, 0.85)'; // Default dark
   }, [homeCountryId, occupiedCountryIds]);
 
-  // Prepare points data for bases and units
-  const basePoints = useMemo(() => bases.map(base => ({
+  // Get base icon based on type
+  const getBaseIcon = (type: string) => {
+    switch (type) {
+      case 'hq': return '⊕';
+      case 'army': return '🛡';
+      case 'navy': return '⚓';
+      case 'airforce': return '✈';
+      case 'intelligence': return '👁';
+      default: return '●';
+    }
+  };
+
+  // Flat labels for bases (rendered on globe surface)
+  const baseLabels = useMemo(() => bases.map(base => ({
     lat: base.position.latitude,
     lng: base.position.longitude,
-    name: base.name,
-    type: base.type,
-    faction: base.faction,
-    size: base.type === 'hq' ? 0.8 : 0.5,
+    text: `${getBaseIcon(base.type)} ${base.name}`,
     color: base.faction === 'player' ? '#22c55e' : base.faction === 'ai' ? '#ef4444' : '#6b7280',
+    size: base.type === 'hq' ? 1.2 : 0.8,
     base,
   })), [bases]);
 
-  const unitPoints = useMemo(() => units.map(unit => ({
+  // Flat labels for units
+  const unitLabels = useMemo(() => units.map(unit => ({
     lat: unit.position.latitude,
     lng: unit.position.longitude,
-    name: unit.templateType.substring(0, 3).toUpperCase(),
-    size: 0.3,
+    text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
     color: unit.faction === 'player' ? '#22c55e' : '#ef4444',
+    size: 0.6,
   })), [units]);
+
+  const allLabels = useMemo(() => [...baseLabels, ...unitLabels], [baseLabels, unitLabels]);
 
   // Movement arcs for units with destinations
   const movementArcs = useMemo(() => units
@@ -124,8 +137,6 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       color: unit.faction === 'player' ? ['#22c55e', '#86efac'] : ['#ef4444', '#fca5a5'],
       name: unit.name,
     })), [units]);
-
-  const allPoints = useMemo(() => [...basePoints, ...unitPoints], [basePoints, unitPoints]);
 
   if (!isLoaded || dimensions.width === 0) {
     return (
@@ -153,19 +164,21 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         polygonStrokeColor={() => '#ffffff'}
         polygonAltitude={0.006}
         onPolygonClick={handlePolygonClick}
-        pointsData={allPoints}
-        pointLat="lat"
-        pointLng="lng"
-        pointColor="color"
-        pointAltitude={0.02}
-        pointRadius="size"
-        pointLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px; color: white;">${d.name}</div>`}
-        onGlobeClick={handleGlobeClick}
-        onPointClick={(point: any) => {
-          if (point.base) {
-            useGameStore.getState().selectBase(point.base);
+        labelsData={allLabels}
+        labelLat="lat"
+        labelLng="lng"
+        labelText="text"
+        labelColor="color"
+        labelSize="size"
+        labelAltitude={0.01}
+        labelDotRadius={0.4}
+        labelResolution={3}
+        onLabelClick={(label: any) => {
+          if (label.base) {
+            useGameStore.getState().selectBase(label.base);
           }
         }}
+        onGlobeClick={handleGlobeClick}
         arcsData={movementArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
