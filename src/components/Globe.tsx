@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { useGameStore } from '@/store/gameStore';
 
@@ -10,27 +10,24 @@ interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
 }
 
-// Store viewer reference outside component to persist across re-renders
-let globalViewer: Cesium.Viewer | null = null;
-let entityDataSource: Cesium.CustomDataSource | null = null;
-
 export default function Globe({ onGlobeClick }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerInitialized = useRef(false);
+  const viewerRef = useRef<Cesium.Viewer | null>(null);
+  const handlerRef = useRef<Cesium.ScreenSpaceEventHandler | null>(null);
+  const entityDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
+  const onGlobeClickRef = useRef(onGlobeClick);
   const [isLoaded, setIsLoaded] = useState(false);
   
   const { hq, bases, units, territories, selectBase } = useGameStore();
 
-  // Stable callback reference
-  const handleGlobeClick = useCallback((lat: number, lng: number) => {
-    onGlobeClick(lat, lng);
+  // Keep callback ref updated
+  useEffect(() => {
+    onGlobeClickRef.current = onGlobeClick;
   }, [onGlobeClick]);
 
   // Initialize Cesium viewer only once
   useEffect(() => {
-    if (!containerRef.current || viewerInitialized.current) return;
-    
-    viewerInitialized.current = true;
+    if (!containerRef.current || viewerRef.current) return;
 
     const viewer = new Cesium.Viewer(containerRef.current, {
       baseLayerPicker: false,
@@ -66,13 +63,14 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     });
 
     // Create a custom data source for game entities
-    entityDataSource = new Cesium.CustomDataSource('gameEntities');
+    const entityDataSource = new Cesium.CustomDataSource('gameEntities');
     viewer.dataSources.add(entityDataSource);
+    entityDataSourceRef.current = entityDataSource;
 
-    globalViewer = viewer;
+    viewerRef.current = viewer;
     setIsLoaded(true);
 
-    // Click handler - check for entity clicks first
+    // Click handler - use ref to always get latest callback
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
       // Check if clicking on an entity first
@@ -101,18 +99,24 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
         const lat = Cesium.Math.toDegrees(cartographic.latitude);
         const lng = Cesium.Math.toDegrees(cartographic.longitude);
-        handleGlobeClick(lat, lng);
+        // Use ref to get latest callback
+        onGlobeClickRef.current(lat, lng);
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    
+    handlerRef.current = handler;
 
     return () => {
       handler.destroy();
-      // Don't destroy viewer to prevent flickering
+      viewer.destroy();
+      viewerRef.current = null;
+      entityDataSourceRef.current = null;
     };
-  }, [handleGlobeClick, selectBase]);
+  }, []);
 
   // Update entities when game state changes - without recreating viewer
   useEffect(() => {
+    const entityDataSource = entityDataSourceRef.current;
     if (!entityDataSource || !isLoaded) return;
 
     // Clear only game entities, not the whole viewer
@@ -139,7 +143,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
     // Add territory influence circles
     territories.forEach((territory) => {
-      entityDataSource!.entities.add({
+      entityDataSource.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           territory.position.longitude,
           territory.position.latitude
@@ -161,7 +165,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       const color = getFactionColor(base.faction);
       const icon = getBaseIcon(base.type);
       
-      entityDataSource!.entities.add({
+      entityDataSource.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           base.position.longitude,
           base.position.latitude,
@@ -196,7 +200,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     units.forEach((unit) => {
       const color = getFactionColor(unit.faction);
 
-      entityDataSource!.entities.add({
+      entityDataSource.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           unit.position.longitude,
           unit.position.latitude,
@@ -224,7 +228,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
       // Draw movement line if unit is moving
       if (unit.destination) {
-        entityDataSource!.entities.add({
+        entityDataSource.entities.add({
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray([
               unit.position.longitude,
