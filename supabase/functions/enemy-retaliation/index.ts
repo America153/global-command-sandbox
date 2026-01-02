@@ -6,9 +6,18 @@ const corsHeaders = {
 };
 
 const UNIT_TYPES = ['infantry', 'armor', 'fighter', 'helicopter', 'special_forces'];
+const VALID_TRIGGER_TYPES = ['border_violation', 'base_attacked', 'missile_strike'];
+
+// Input validation helper
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
 
 function generateRaidUnits(baseId: string, baseLat: number, baseLon: number, intensity: number): any[] {
-  const unitCount = Math.min(2 + Math.floor(intensity * 3), 5);
+  // Clamp intensity to valid range
+  const safeIntensity = Math.max(0, Math.min(intensity, 3));
+  const unitCount = Math.min(2 + Math.floor(safeIntensity * 3), 5);
   const units: any[] = [];
   
   for (let i = 0; i < unitCount; i++) {
@@ -42,11 +51,34 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { sessionId, triggerType, targetPosition, intensity = 1 } = await req.json();
-    
+    const body = await req.json();
+    const { sessionId, playerId, triggerType, targetPosition, intensity = 1 } = body;
+
+    // Input validation
+    if (!sessionId || typeof sessionId !== 'string' || !isValidUUID(sessionId)) {
+      return new Response(JSON.stringify({ error: 'Invalid session ID' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!playerId || typeof playerId !== 'string') {
+      return new Response(JSON.stringify({ error: 'Player ID required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!triggerType || !VALID_TRIGGER_TYPES.includes(triggerType)) {
+      return new Response(JSON.stringify({ error: 'Invalid trigger type' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log(`[enemy-retaliation] Triggered: ${triggerType} for session ${sessionId}`);
 
-    // Get session
+    // Get session and verify ownership
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
@@ -56,6 +88,15 @@ Deno.serve(async (req) => {
     if (sessionError || !session) {
       return new Response(JSON.stringify({ error: 'Session not found' }), {
         status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify session ownership
+    if (session.player_id !== playerId) {
+      console.warn(`[enemy-retaliation] Ownership mismatch: expected ${session.player_id}, got ${playerId}`);
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -74,7 +115,7 @@ Deno.serve(async (req) => {
     let minDist = Infinity;
     
     for (const base of bases || []) {
-      if (targetPosition) {
+      if (targetPosition && typeof targetPosition.latitude === 'number' && typeof targetPosition.longitude === 'number') {
         const dist = Math.sqrt(
           Math.pow(base.latitude - targetPosition.latitude, 2) +
           Math.pow(base.longitude - targetPosition.longitude, 2)
@@ -135,7 +176,7 @@ Deno.serve(async (req) => {
         retaliationBase.id,
         retaliationBase.latitude,
         retaliationBase.longitude,
-        intensity
+        typeof intensity === 'number' ? intensity : 1
       );
 
       // Insert raid units
@@ -194,7 +235,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[enemy-retaliation] Error:', error);
-    return new Response(JSON.stringify({ error: String(error) }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
