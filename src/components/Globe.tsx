@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GlobeGL from 'react-globe.gl';
 import { useGameStore } from '@/store/gameStore';
+import { MISSILE_TEMPLATES } from '@/types/game';
 
 interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
@@ -145,14 +146,18 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       name: unit.name,
     })), [units]);
 
-  // Missile arcs
+  // Missile arcs - more visible with thicker stroke and brighter colors
   const missileArcs = useMemo(() => missilesInFlight.map(missile => ({
     startLat: missile.startPosition.latitude,
     startLng: missile.startPosition.longitude,
     endLat: missile.targetPosition.latitude,
     endLng: missile.targetPosition.longitude,
-    color: ['#ff0000', '#ff6600'],
-    name: `🚀 Missile Strike`,
+    color: ['#ff0000', '#ffff00', '#ff6600'],
+    name: `🚀 ${MISSILE_TEMPLATES[missile.missileType]?.name || 'Missile'} → Target`,
+    stroke: 2,
+    dashLength: 0.6,
+    dashGap: 0.1,
+    dashAnimateTime: 500,
   })), [missilesInFlight]);
 
   const allArcs = useMemo(() => [...movementArcs, ...missileArcs], [movementArcs, missileArcs]);
@@ -222,12 +227,12 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         arcEndLat="endLat"
         arcEndLng="endLng"
         arcColor="color"
-        arcDashLength={0.4}
-        arcDashGap={0.2}
-        arcDashAnimateTime={1500}
-        arcStroke={0.5}
-        arcAltitudeAutoScale={0.3}
-        arcLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px; color: white;">Moving: ${d.name}</div>`}
+        arcDashLength={(d: any) => d.dashLength || 0.4}
+        arcDashGap={(d: any) => d.dashGap || 0.2}
+        arcDashAnimateTime={(d: any) => d.dashAnimateTime || 1500}
+        arcStroke={(d: any) => d.stroke || 0.5}
+        arcAltitudeAutoScale={0.4}
+        arcLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.9); padding: 6px 10px; border-radius: 4px; color: ${d.stroke ? '#ff4444' : 'white'}; border: 1px solid ${d.stroke ? '#ff4444' : '#333'};">${d.name}</div>`}
         ringsData={explosionRings}
         ringLat="lat"
         ringLng="lng"

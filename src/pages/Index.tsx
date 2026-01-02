@@ -8,6 +8,7 @@ import TopBar from '@/components/TopBar';
 import Globe from '@/components/Globe';
 import BaseDetailsPanel from '@/components/BaseDetailsPanel';
 import DeploymentPanel from '@/components/DeploymentPanel';
+import MissileTracker from '@/components/MissileTracker';
 
 export default function Index() {
   useEffect(() => {
@@ -70,6 +71,9 @@ export default function Index() {
           
           {/* Deployment Panel */}
           <DeploymentPanel />
+          
+          {/* Missile Tracker */}
+          <MissileTracker />
           
           {/* Coordinate Overlay */}
           <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
