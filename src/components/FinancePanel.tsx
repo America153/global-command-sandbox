@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, DollarSign, TrendingUp, TrendingDown, Building2, Users, Landmark, Plus, Minus } from 'lucide-react';
+import { X, DollarSign, TrendingUp, TrendingDown, Building2, Users, Landmark, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/store/gameStore';
 import { getCountryPower } from '@/engine/countryDefenders';
@@ -8,20 +8,11 @@ interface FinancePanelProps {
   onClose: () => void;
 }
 
-// Constants for financial calculations
-const UNIT_UPKEEP = 10000; // $10k per unit
-const BASE_UPKEEP = 100000; // $100k per base
-const BASE_INCOME = 10000000; // $10M base income per tick
-const TERRITORY_INCOME_MULTIPLIER = 500000; // $500k per power level
-const LOAN_INTEREST_RATE = 0.05; // 5% interest per tick payment
-
-export interface Loan {
-  id: string;
-  principal: number;
-  remaining: number;
-  interestRate: number;
-  takenAtTick: number;
-}
+// Constants for financial calculations (display only - actual logic in gameStore)
+const UNIT_UPKEEP = 10000;
+const BASE_UPKEEP = 100000;
+const BASE_INCOME = 10000000;
+const TERRITORY_INCOME_MULTIPLIER = 500000;
 
 export default function FinancePanel({ onClose }: FinancePanelProps) {
   const { 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, TrendingUp, TrendingDown, BarChart3, RefreshCw } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/store/gameStore';
 
@@ -7,26 +7,15 @@ interface StockMarketPanelProps {
   onClose: () => void;
 }
 
-export interface Stock {
+interface Stock {
   id: string;
   name: string;
   symbol: string;
   price: number;
   previousPrice: number;
-  volatility: number; // 0-1, how much it can change per tick
+  volatility: number;
   sector: 'defense' | 'tech' | 'energy' | 'finance';
 }
-
-const INITIAL_STOCKS: Stock[] = [
-  { id: 'lmt', name: 'Lockheed Martin', symbol: 'LMT', price: 450, previousPrice: 450, volatility: 0.03, sector: 'defense' },
-  { id: 'rtn', name: 'Raytheon Tech', symbol: 'RTN', price: 320, previousPrice: 320, volatility: 0.04, sector: 'defense' },
-  { id: 'ba', name: 'Boeing', symbol: 'BA', price: 180, previousPrice: 180, volatility: 0.05, sector: 'defense' },
-  { id: 'nvda', name: 'NVIDIA', symbol: 'NVDA', price: 890, previousPrice: 890, volatility: 0.06, sector: 'tech' },
-  { id: 'msft', name: 'Microsoft', symbol: 'MSFT', price: 420, previousPrice: 420, volatility: 0.025, sector: 'tech' },
-  { id: 'xom', name: 'ExxonMobil', symbol: 'XOM', price: 110, previousPrice: 110, volatility: 0.035, sector: 'energy' },
-  { id: 'cvx', name: 'Chevron', symbol: 'CVX', price: 155, previousPrice: 155, volatility: 0.03, sector: 'energy' },
-  { id: 'jpm', name: 'JPMorgan Chase', symbol: 'JPM', price: 195, previousPrice: 195, volatility: 0.025, sector: 'finance' },
-];
 
 export default function StockMarketPanel({ onClose }: StockMarketPanelProps) {
   const { resources, stocks, portfolio, buyStock, sellStock, updateStockPrices } = useGameStore();
@@ -226,5 +215,3 @@ export default function StockMarketPanel({ onClose }: StockMarketPanelProps) {
     </div>
   );
 }
-
-export { INITIAL_STOCKS };
