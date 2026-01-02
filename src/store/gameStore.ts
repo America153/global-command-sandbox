@@ -727,7 +727,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       );
 
       // Apply retaliation movements
-      if (retaliation.movedUnits.length > 0 || retaliation.reinforcements.length > 0 || retaliation.raidForce.length > 0) {
+      if (retaliation.movedUnits.length > 0 || retaliation.reinforcements.length > 0 || retaliation.raidForce.length > 0 || retaliation.randomAttack.length > 0) {
         retaliationTick = currentTick;
         retaliation.logs.forEach(log => get().addLog('intel', log));
       }
@@ -740,7 +740,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             return moved || u;
           }),
           ...retaliation.reinforcements,
-          ...retaliation.raidForce, // Add raid force units
+          ...retaliation.raidForce,
+          ...retaliation.randomAttack,
         ],
         bases: combatResult.updatedEnemyBases,
       };

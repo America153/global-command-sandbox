@@ -223,7 +223,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        globeImageUrl="/globe/earth-blue-marble.jpg"
+        globeImageUrl="/globe/earth-nasa-hires.jpg"
         backgroundImageUrl="/globe/night-sky.png"
         bumpImageUrl="/globe/earth-topology.png"
         polygonsData={countriesData.features}

@@ -41,6 +41,32 @@ export function shouldRetaliate(
   return Math.random() < chance;
 }
 
+// Random attacks - enemy initiates attacks regardless of player actions
+export function shouldLaunchRandomAttack(
+  alertLevel: string,
+  ticksSinceLastAction: number,
+  aiUnitCount: number,
+  aiBaseCount: number
+): boolean {
+  // Need minimum cooldown
+  if (ticksSinceLastAction < 50) return false;
+  
+  // Need units and bases to attack from
+  if (aiUnitCount === 0 || aiBaseCount === 0) return false;
+  
+  // Base chance increases with alert level and enemy strength
+  let baseChance = 0.02; // 2% per tick in peace
+  
+  if (alertLevel === 'vigilant') baseChance = 0.05;
+  else if (alertLevel === 'hostile') baseChance = 0.1;
+  else if (alertLevel === 'war') baseChance = 0.15;
+  
+  // More units = more aggressive
+  const strengthBonus = Math.min(0.1, aiUnitCount * 0.005);
+  
+  return Math.random() < (baseChance + strengthBonus);
+}
+
 // Find the best target for AI retaliation
 export function findRetaliationTarget(
   aiUnits: Unit[],
@@ -242,16 +268,30 @@ export function processRetaliation(
   movedUnits: Unit[];
   reinforcements: Unit[];
   raidForce: Unit[];
+  randomAttack: Unit[];
   logs: string[];
 } {
   const logs: string[] = [];
   let movedUnits: Unit[] = [];
   let reinforcements: Unit[] = [];
   let raidForce: Unit[] = [];
+  let randomAttack: Unit[] = [];
 
   // Check if AI should take action
   if (!shouldRetaliate(diplomaticStatus, alertLevel, ticksSinceLastRetaliation)) {
-    return { movedUnits: [], reinforcements: [], raidForce: [], logs: [] };
+    // Even if not retaliating, check for random attacks
+    if (shouldLaunchRandomAttack(alertLevel, ticksSinceLastRetaliation, aiUnits.length, aiBases.length) && playerBases.length > 0) {
+      const targetBase = playerBases[Math.floor(Math.random() * playerBases.length)];
+      const sourceBase = aiBases[Math.floor(Math.random() * aiBases.length)];
+      
+      if (sourceBase && targetBase) {
+        randomAttack = generateRaidForce(sourceBase, targetBase.position, currentTick, aiUnits.length);
+        const targetCountry = findCountryAtPosition(targetBase.position.latitude, targetBase.position.longitude);
+        logs.push(`⚔️ ENEMY OFFENSIVE! ${randomAttack.length} units attacking ${targetCountry?.name || 'your base'}!`);
+        return { movedUnits: [], reinforcements: [], raidForce: [], randomAttack, logs };
+      }
+    }
+    return { movedUnits: [], reinforcements: [], raidForce: [], randomAttack: [], logs: [] };
   }
 
   // Move units toward player
@@ -308,5 +348,5 @@ export function processRetaliation(
     }
   }
 
-  return { movedUnits, reinforcements, raidForce, logs };
+  return { movedUnits, reinforcements, raidForce, randomAttack, logs };
 }
