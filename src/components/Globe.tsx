@@ -50,6 +50,14 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       ),
     });
 
+    // Add country borders overlay layer
+    viewer.imageryLayers.addImageryProvider(
+      new Cesium.UrlTemplateImageryProvider({
+        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        maximumLevel: 19,
+      })
+    );
+
     // Dark theme styling
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0a0f14');
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0d1117');
