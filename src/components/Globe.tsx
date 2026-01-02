@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import GlobeGL from 'react-globe.gl';
 import { useGameStore } from '@/store/gameStore';
 
 interface GlobeProps {
@@ -8,297 +7,134 @@ interface GlobeProps {
 }
 
 export default function Globe({ onGlobeClick }: GlobeProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const onGlobeClickRef = useRef(onGlobeClick);
+  const globeRef = useRef<any>(null);
+  const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
-  const [accessToken, setAccessToken] = useState<string>(() => {
-    return localStorage.getItem('mapbox_token') || '';
-  });
   
   const { bases, units, territories } = useGameStore();
 
-  // Keep callback ref updated
+  // Load countries GeoJSON
   useEffect(() => {
-    onGlobeClickRef.current = onGlobeClick;
+    fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+      .then(res => res.json())
+      .then(data => {
+        setCountriesData(data);
+        setIsLoaded(true);
+      })
+      .catch(() => {
+        // Fallback to simpler dataset
+        fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+          .then(res => res.json())
+          .then(topology => {
+            import('topojson-client').then(topojson => {
+              const geojson = topojson.feature(topology, topology.objects.countries);
+              setCountriesData(geojson);
+              setIsLoaded(true);
+            });
+          });
+      });
+  }, []);
+
+  // Auto-rotate
+  useEffect(() => {
+    if (!globeRef.current) return;
+    
+    const globe = globeRef.current;
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 0.3;
+    globe.pointOfView({ altitude: 2.5 });
+  }, [isLoaded]);
+
+  const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null) => {
+    if (coords) {
+      onGlobeClick(coords.lat, coords.lng);
+    }
   }, [onGlobeClick]);
 
-  // Initialize Mapbox viewer
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current || !accessToken) return;
-
-    mapboxgl.accessToken = accessToken;
-    
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
-      projection: 'globe',
-      zoom: 1.5,
-      center: [0, 20],
-      pitch: 0,
-    });
-
-    map.addControl(
-      new mapboxgl.NavigationControl({
-        visualizePitch: true,
-      }),
-      'top-right'
-    );
-
-    map.on('style.load', () => {
-      // Add atmosphere and fog for globe effect
-      map.setFog({
-        color: 'rgb(10, 15, 20)',
-        'high-color': 'rgb(20, 30, 50)',
-        'horizon-blend': 0.1,
-        'space-color': 'rgb(5, 10, 15)',
-        'star-intensity': 0.6,
-      });
-
-      // Style country borders with white lines
-      map.addLayer({
-        id: 'country-borders',
-        type: 'line',
-        source: 'composite',
-        'source-layer': 'admin',
-        filter: ['==', ['get', 'admin_level'], 0],
-        paint: {
-          'line-color': '#ffffff',
-          'line-width': 1,
-          'line-opacity': 0.6,
-        },
-      });
-
-      setIsLoaded(true);
-    });
-
-    // Click handler
-    map.on('click', (e) => {
-      onGlobeClickRef.current(e.lngLat.lat, e.lngLat.lng);
-    });
-
-    // Slow rotation
-    const secondsPerRevolution = 240;
-    let userInteracting = false;
-
-    function spinGlobe() {
-      if (!mapRef.current) return;
-      const zoom = mapRef.current.getZoom();
-      if (!userInteracting && zoom < 5) {
-        let distancePerSecond = 360 / secondsPerRevolution;
-        if (zoom > 3) {
-          const zoomDif = (5 - zoom) / 2;
-          distancePerSecond *= zoomDif;
-        }
-        const center = mapRef.current.getCenter();
-        center.lng -= distancePerSecond;
-        mapRef.current.easeTo({ center, duration: 1000, easing: (n) => n });
-      }
+  const getFactionColor = (faction: string) => {
+    switch (faction) {
+      case 'player': return 'rgba(34, 197, 94, 0.3)';
+      case 'ai': return 'rgba(239, 68, 68, 0.3)';
+      default: return 'rgba(107, 114, 128, 0.1)';
     }
+  };
 
-    map.on('mousedown', () => { userInteracting = true; });
-    map.on('dragstart', () => { userInteracting = true; });
-    map.on('mouseup', () => { userInteracting = false; spinGlobe(); });
-    map.on('touchend', () => { userInteracting = false; spinGlobe(); });
-    map.on('moveend', spinGlobe);
-    
-    map.on('load', spinGlobe);
+  // Prepare points data for bases and units
+  const basePoints = bases.map(base => ({
+    lat: base.position.latitude,
+    lng: base.position.longitude,
+    name: base.name,
+    type: base.type,
+    faction: base.faction,
+    size: base.type === 'hq' ? 0.8 : 0.5,
+    color: base.faction === 'player' ? '#22c55e' : base.faction === 'ai' ? '#ef4444' : '#6b7280',
+    base,
+  }));
 
-    mapRef.current = map;
+  const unitPoints = units.map(unit => ({
+    lat: unit.position.latitude,
+    lng: unit.position.longitude,
+    name: unit.templateType.substring(0, 3).toUpperCase(),
+    size: 0.3,
+    color: unit.faction === 'player' ? '#22c55e' : '#ef4444',
+  }));
 
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
-  }, [accessToken]);
+  const allPoints = [...basePoints, ...unitPoints];
 
-  // Update markers when game state changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !isLoaded) return;
+  // Territory rings
+  const territoryRings = territories.map(t => ({
+    lat: t.position.latitude,
+    lng: t.position.longitude,
+    maxR: t.radius / 111, // Convert km to degrees approx
+    propagationSpeed: 0,
+    repeatPeriod: 0,
+    color: getFactionColor(t.faction),
+  }));
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-
-    const getFactionColor = (faction: string) => {
-      switch (faction) {
-        case 'player': return '#22c55e';
-        case 'ai': return '#ef4444';
-        default: return '#6b7280';
-      }
-    };
-
-    const getBaseIcon = (type: string): string => {
-      switch (type) {
-        case 'hq': return '⊕';
-        case 'army': return '🛡';
-        case 'navy': return '⚓';
-        case 'airforce': return '✈';
-        case 'intelligence': return '👁';
-        default: return '●';
-      }
-    };
-
-    // Add territory circles as layers if not exist
-    territories.forEach((territory, idx) => {
-      const sourceId = `territory-${idx}`;
-      const layerId = `territory-layer-${idx}`;
-      
-      if (map.getSource(sourceId)) {
-        map.removeLayer(layerId);
-        map.removeSource(sourceId);
-      }
-
-      const center = [territory.position.longitude, territory.position.latitude];
-      const radiusInKm = territory.radius;
-      const points = 64;
-      const coords: [number, number][] = [];
-      
-      for (let i = 0; i <= points; i++) {
-        const angle = (i / points) * 2 * Math.PI;
-        const dx = radiusInKm * Math.cos(angle);
-        const dy = radiusInKm * Math.sin(angle);
-        const lat = territory.position.latitude + (dy / 111);
-        const lng = territory.position.longitude + (dx / (111 * Math.cos(territory.position.latitude * Math.PI / 180)));
-        coords.push([lng, lat]);
-      }
-
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'Polygon',
-            coordinates: [coords],
-          },
-        },
-      });
-
-      map.addLayer({
-        id: layerId,
-        type: 'fill',
-        source: sourceId,
-        paint: {
-          'fill-color': getFactionColor(territory.faction),
-          'fill-opacity': 0.15,
-        },
-      });
-    });
-
-    // Add base markers
-    bases.forEach((base) => {
-      const color = getFactionColor(base.faction);
-      const icon = getBaseIcon(base.type);
-      
-      const el = document.createElement('div');
-      el.className = 'flex flex-col items-center';
-      el.innerHTML = `
-        <div style="
-          width: ${base.type === 'hq' ? '20px' : '14px'};
-          height: ${base.type === 'hq' ? '20px' : '14px'};
-          background: ${color};
-          border: 2px solid white;
-          border-radius: 50%;
-        "></div>
-        <div style="
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          color: white;
-          text-shadow: 0 0 3px black, 0 0 3px black;
-          margin-top: 2px;
-          white-space: nowrap;
-        ">${icon} ${base.name}</div>
-      `;
-
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const state = useGameStore.getState();
-        state.selectBase(base);
-      });
-
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([base.position.longitude, base.position.latitude])
-        .addTo(map);
-      
-      markersRef.current.push(marker);
-    });
-
-    // Add unit markers
-    units.forEach((unit) => {
-      const color = getFactionColor(unit.faction);
-      
-      const el = document.createElement('div');
-      el.innerHTML = `
-        <div style="
-          width: 8px;
-          height: 8px;
-          background: ${color};
-          border: 1px solid white;
-          border-radius: 50%;
-        "></div>
-        <div style="
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 8px;
-          color: white;
-          text-shadow: 0 0 2px black;
-          text-align: center;
-        ">${unit.templateType.substring(0, 3).toUpperCase()}</div>
-      `;
-
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([unit.position.longitude, unit.position.latitude])
-        .addTo(map);
-      
-      markersRef.current.push(marker);
-    });
-  }, [bases, units, territories, isLoaded]);
-
-  // Token input if not set
-  if (!accessToken) {
+  if (!isLoaded) {
     return (
       <div className="relative w-full h-full flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 p-6 max-w-md">
-          <h2 className="text-xl font-mono text-foreground">Mapbox Token Required</h2>
-          <p className="text-sm text-muted-foreground text-center">
-            Enter your Mapbox public token to enable the globe. Get one at{' '}
-            <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-              mapbox.com
-            </a>
-          </p>
-          <input
-            type="text"
-            placeholder="pk.eyJ..."
-            className="w-full px-3 py-2 bg-muted border border-border rounded font-mono text-sm"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const value = (e.target as HTMLInputElement).value;
-                if (value.startsWith('pk.')) {
-                  localStorage.setItem('mapbox_token', value);
-                  setAccessToken(value);
-                }
-              }
-            }}
-          />
-          <p className="text-xs text-muted-foreground">Press Enter to save</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground font-mono text-sm">INITIALIZING BATTLESPACE...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={containerRef} className="w-full h-full" />
-      {!isLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground font-mono text-sm">INITIALIZING BATTLESPACE...</p>
-          </div>
-        </div>
-      )}
+    <div className="relative w-full h-full bg-[#0a0f14]">
+      <GlobeGL
+        ref={globeRef}
+        globeImageUrl="//unpkg.com/three-globe/example/img/earth-dark.jpg"
+        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+        polygonsData={countriesData.features}
+        polygonCapColor={() => 'rgba(20, 30, 45, 0.8)'}
+        polygonSideColor={() => 'rgba(40, 60, 90, 0.4)'}
+        polygonStrokeColor={() => '#ffffff'}
+        polygonAltitude={0.006}
+        pointsData={allPoints}
+        pointLat="lat"
+        pointLng="lng"
+        pointColor="color"
+        pointAltitude={0.02}
+        pointRadius="size"
+        pointLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px; color: white;">${d.name}</div>`}
+        onGlobeClick={handleGlobeClick}
+        onPointClick={(point: any) => {
+          if (point.base) {
+            useGameStore.getState().selectBase(point.base);
+          }
+        }}
+        ringsData={territoryRings}
+        ringLat="lat"
+        ringLng="lng"
+        ringMaxRadius="maxR"
+        ringColor="color"
+        ringAltitude={0.003}
+        atmosphereColor="#1e40af"
+        atmosphereAltitude={0.15}
+      />
     </div>
   );
 }
