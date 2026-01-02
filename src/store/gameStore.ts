@@ -23,7 +23,7 @@ import {
   hasIntelligenceCapability,
   getVisibleEnemyEntities
 } from '@/engine/aiEnemy';
-import { generateCountryDefenses, getCountryPower } from '@/engine/countryDefenders';
+import { generateCountryDefenses, getCountryPower, isCountryConquered, getInvadedCountryIds } from '@/engine/countryDefenders';
 import { processCombatTick } from '@/engine/combat';
 import { 
   type DiplomacyState, 
@@ -100,7 +100,8 @@ interface GameStore extends GameState {
   cancelDeployment: () => void;
   // Country control
   homeCountryId: string | null;
-  occupiedCountryIds: string[];
+  occupiedCountryIds: string[];  // Countries with player units present
+  capturedCountryIds: string[];  // Countries fully conquered (all enemy bases destroyed)
   struckCountryIds: string[];
   // Missile targeting
   missileTargeting: MissileTargetingState;
@@ -123,6 +124,7 @@ const initialState: GameState & {
   deployment: DeploymentState; 
   homeCountryId: string | null; 
   occupiedCountryIds: string[];
+  capturedCountryIds: string[];
   struckCountryIds: string[];
   missileTargeting: MissileTargetingState;
   missilesInFlight: MissileInFlight[];
@@ -150,6 +152,7 @@ const initialState: GameState & {
   },
   homeCountryId: null,
   occupiedCountryIds: [],
+  capturedCountryIds: [],
   struckCountryIds: [],
   missileTargeting: {
     isActive: false,
@@ -740,12 +743,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     }
 
+    // === CHECK FOR CONQUERED COUNTRIES ===
+    // A country is conquered when all its enemy bases (including HQ) are destroyed
+    const newCapturedCountries = [...state.capturedCountryIds];
+    const invadedCountries = getInvadedCountryIds(state.aiEnemy.bases); // Countries that HAD defenders
+    
+    for (const countryId of invadedCountries) {
+      // Check if this country's bases are now all destroyed
+      if (isCountryConquered(countryId, updatedAIEnemy.bases) && !newCapturedCountries.includes(countryId)) {
+        newCapturedCountries.push(countryId);
+        
+        // Find country name for the log
+        // We need to iterate player units to find one that was in this country
+        let countryName = `Country ${countryId}`;
+        for (const unit of combatResult.updatedPlayerUnits) {
+          const c = findCountryAtPosition(unit.position.latitude, unit.position.longitude);
+          if (c && c.id === countryId) {
+            countryName = c.name;
+            break;
+          }
+        }
+        
+        get().addLog('combat', `🏆 ${countryName} CONQUERED! All enemy forces eliminated. Territory secured.`);
+      }
+    }
+
+    // Also check using the current enemy bases for any country that might have been wiped out
+    const currentInvadedCountries = getInvadedCountryIds(updatedAIEnemy.bases);
+    for (const countryId of state.occupiedCountryIds) {
+      // If we have units there but no more enemy bases, it's conquered
+      const hasEnemyBases = currentInvadedCountries.includes(countryId);
+      const hadDefenders = invadedCountries.includes(countryId);
+      
+      if (hadDefenders && !hasEnemyBases && !newCapturedCountries.includes(countryId)) {
+        newCapturedCountries.push(countryId);
+        get().addLog('combat', `🏆 Territory secured! Enemy forces eliminated.`);
+      }
+    }
+
     set({
       tick: currentTick,
       resources: state.resources + incomePerTick,
       units: combatResult.updatedPlayerUnits,
       bases: combatResult.updatedPlayerBases,
       occupiedCountryIds: Array.from(newOccupiedCountries),
+      capturedCountryIds: newCapturedCountries,
       missilesInFlight: remainingMissiles,
       explosions: activeExplosions,
       aiEnemy: updatedAIEnemy,
