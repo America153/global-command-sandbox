@@ -13,7 +13,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions } = useGameStore();
 
   // Handle resize
   useEffect(() => {
@@ -157,6 +157,24 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
   const allArcs = useMemo(() => [...movementArcs, ...missileArcs], [movementArcs, missileArcs]);
 
+  // Explosion rings (animated growing circles)
+  const explosionRings = useMemo(() => explosions.map(explosion => ({
+    lat: explosion.position.latitude,
+    lng: explosion.position.longitude,
+    maxR: 3,
+    propagationSpeed: 2,
+    repeatPeriod: 1000,
+    color: () => 'rgba(255, 100, 0, 0.8)',
+  })), [explosions]);
+
+  // Explosion points (bright center points)
+  const explosionPoints = useMemo(() => explosions.map(explosion => ({
+    lat: explosion.position.latitude,
+    lng: explosion.position.longitude,
+    size: 2,
+    color: '#ff4400',
+  })), [explosions]);
+
   if (!isLoaded || dimensions.width === 0) {
     return (
       <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-background">
@@ -210,6 +228,20 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         arcStroke={0.5}
         arcAltitudeAutoScale={0.3}
         arcLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px; color: white;">Moving: ${d.name}</div>`}
+        ringsData={explosionRings}
+        ringLat="lat"
+        ringLng="lng"
+        ringMaxRadius="maxR"
+        ringPropagationSpeed="propagationSpeed"
+        ringRepeatPeriod="repeatPeriod"
+        ringColor="color"
+        ringAltitude={0.015}
+        pointsData={explosionPoints}
+        pointLat="lat"
+        pointLng="lng"
+        pointColor="color"
+        pointAltitude={0.02}
+        pointRadius="size"
         atmosphereColor="#1e40af"
         atmosphereAltitude={0.15}
       />

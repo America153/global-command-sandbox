@@ -37,6 +37,13 @@ interface MissileInFlight {
   arrivalTick: number;
 }
 
+interface Explosion {
+  id: string;
+  position: Coordinates;
+  startTick: number;
+  duration: number; // ticks
+}
+
 interface GameStore extends GameState {
   // Actions
   setSpeed: (speed: number) => void;
@@ -67,6 +74,7 @@ interface GameStore extends GameState {
   cancelMissileTargeting: () => void;
   fireMissile: (targetPosition: Coordinates) => void;
   missilesInFlight: MissileInFlight[];
+  explosions: Explosion[];
 }
 
 const initialState: GameState & { 
@@ -77,6 +85,7 @@ const initialState: GameState & {
   struckCountryIds: string[];
   missileTargeting: MissileTargetingState;
   missilesInFlight: MissileInFlight[];
+  explosions: Explosion[];
 } = {
   tick: 0,
   speed: 1,
@@ -105,6 +114,7 @@ const initialState: GameState & {
     targetPosition: null,
   },
   missilesInFlight: [],
+  explosions: [],
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -173,6 +183,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       navy: { name: 'Naval Base', cost: 600, influenceRadius: 100, symbol: 'NAVY' },
       airforce: { name: 'Air Force Base', cost: 700, influenceRadius: 150, symbol: 'AF' },
       intelligence: { name: 'Intelligence Center', cost: 400, influenceRadius: 200, symbol: 'INTEL' },
+      missile: { name: 'Missile Silo', cost: 800, influenceRadius: 50, symbol: 'MSL' },
     }[type];
 
     if (state.resources < config.cost) {
@@ -431,11 +442,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return unit;
     });
 
+    // Process missiles - check for arrivals
+    const currentTick = state.tick + 1;
+    const arrivedMissiles = state.missilesInFlight.filter(m => currentTick >= m.arrivalTick);
+    const remainingMissiles = state.missilesInFlight.filter(m => currentTick < m.arrivalTick);
+    
+    // Create explosions for arrived missiles
+    const newExplosions = arrivedMissiles.map(missile => ({
+      id: uuidv4(),
+      position: missile.targetPosition,
+      startTick: currentTick,
+      duration: 30, // 30 ticks (~3 seconds at normal speed)
+    }));
+
+    // Log missile impacts
+    arrivedMissiles.forEach(missile => {
+      const country = findCountryAtPosition(missile.targetPosition.latitude, missile.targetPosition.longitude);
+      const locationName = country ? country.name : 'target';
+      get().addLog('combat', `💥 Missile impact at ${locationName}!`, missile.targetPosition);
+    });
+
+    // Clean up old explosions
+    const activeExplosions = [...state.explosions, ...newExplosions].filter(
+      exp => currentTick - exp.startTick < exp.duration
+    );
+
     set({
-      tick: state.tick + 1,
+      tick: currentTick,
       resources: state.resources + incomePerTick,
       units: updatedUnits,
       occupiedCountryIds: Array.from(newOccupiedCountries),
+      missilesInFlight: remainingMissiles,
+      explosions: activeExplosions,
     });
   },
 
