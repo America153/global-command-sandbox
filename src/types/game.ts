@@ -139,13 +139,13 @@ export interface AIDecision {
 
 // Unit templates database
 export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
-  // Land units
+  // Land units - 3x speed boost
   infantry: {
     type: 'infantry',
     domain: 'land',
     name: 'Infantry Battalion',
     symbol: 'INF',
-    speed: 30,
+    speed: 90, // 30 * 3
     range: 500,
     attack: 40,
     defense: 50,
@@ -158,7 +158,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Armored Division',
     symbol: 'ARM',
-    speed: 60,
+    speed: 180, // 60 * 3
     range: 400,
     attack: 80,
     defense: 70,
@@ -171,7 +171,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Artillery Battery',
     symbol: 'ART',
-    speed: 25,
+    speed: 75, // 25 * 3
     range: 50,
     attack: 90,
     defense: 20,
@@ -184,7 +184,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Air Defense System',
     symbol: 'ADA',
-    speed: 40,
+    speed: 120, // 40 * 3
     range: 200,
     attack: 70,
     defense: 40,
@@ -197,7 +197,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'land',
     name: 'Engineer Corps',
     symbol: 'ENG',
-    speed: 35,
+    speed: 105, // 35 * 3
     range: 300,
     attack: 20,
     defense: 30,
@@ -337,13 +337,13 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     productionTime: 7,
     requiredBase: ['navy'],
   },
-  // Special units
+  // Special units - 3x speed boost for land-based
   special_forces: {
     type: 'special_forces',
     domain: 'special',
     name: 'Special Forces Team',
     symbol: 'SOF',
-    speed: 50,
+    speed: 150, // 50 * 3
     range: 2000,
     attack: 70,
     defense: 40,
@@ -369,7 +369,7 @@ export const UNIT_TEMPLATES: Record<UnitType, UnitTemplate> = {
     domain: 'special',
     name: 'Intelligence Cell',
     symbol: 'INT',
-    speed: 40,
+    speed: 120, // 40 * 3
     range: 3000,
     attack: 10,
     defense: 30,
