@@ -1,39 +1,53 @@
+import * as topojson from 'topojson-client';
+import type { Topology, GeometryCollection } from 'topojson-specification';
+
 // Country data types
 export interface CountryData {
   id: string;
   name: string;
-  coordinates: any[]; // GeoJSON polygon coordinates
+  coordinates: number[][][][]; // MultiPolygon coordinates
 }
 
-// Initialize with fallback data immediately
-export let COUNTRIES: CountryData[] = getFallbackCountries();
+// Store for loaded countries
+export let COUNTRIES: CountryData[] = [];
 
-// Load countries - uses fallback data (external GeoJSON too large)
+// Load countries from TopoJSON world atlas
 export async function loadCountries(): Promise<CountryData[]> {
-  return COUNTRIES;
-}
-
-// Fallback simplified country data
-function getFallbackCountries(): CountryData[] {
-  return [
-    { id: 'usa', name: 'United States', coordinates: [[[[-125, 49], [-125, 25], [-100, 25], [-80, 25], [-80, 45], [-70, 45], [-70, 49], [-125, 49]]]] },
-    { id: 'can', name: 'Canada', coordinates: [[[[-141, 70], [-141, 49], [-70, 49], [-55, 50], [-55, 70], [-141, 70]]]] },
-    { id: 'mex', name: 'Mexico', coordinates: [[[[-117, 32], [-117, 15], [-87, 15], [-87, 22], [-97, 25], [-105, 32], [-117, 32]]]] },
-    { id: 'bra', name: 'Brazil', coordinates: [[[[-74, 5], [-74, -10], [-60, -15], [-55, -25], [-48, -28], [-35, -10], [-35, 5], [-50, 5], [-74, 5]]]] },
-    { id: 'gbr', name: 'United Kingdom', coordinates: [[[[-8, 60], [-8, 50], [2, 50], [2, 60], [-8, 60]]]] },
-    { id: 'fra', name: 'France', coordinates: [[[[-5, 51], [-5, 42], [8, 42], [8, 51], [-5, 51]]]] },
-    { id: 'deu', name: 'Germany', coordinates: [[[[6, 55], [6, 47], [15, 47], [15, 55], [6, 55]]]] },
-    { id: 'rus', name: 'Russia', coordinates: [[[[30, 72], [30, 45], [180, 45], [180, 72], [30, 72]]]] },
-    { id: 'chn', name: 'China', coordinates: [[[[73, 53], [73, 18], [135, 18], [135, 53], [73, 53]]]] },
-    { id: 'ind', name: 'India', coordinates: [[[[68, 35], [68, 8], [97, 8], [97, 35], [68, 35]]]] },
-    { id: 'jpn', name: 'Japan', coordinates: [[[[129, 46], [129, 31], [146, 31], [146, 46], [129, 46]]]] },
-    { id: 'aus', name: 'Australia', coordinates: [[[[113, -10], [113, -44], [154, -44], [154, -10], [113, -10]]]] },
-    { id: 'zaf', name: 'South Africa', coordinates: [[[[16, -22], [16, -35], [33, -35], [33, -22], [16, -22]]]] },
-    { id: 'egy', name: 'Egypt', coordinates: [[[[25, 32], [25, 22], [36, 22], [36, 32], [25, 32]]]] },
-    { id: 'sau', name: 'Saudi Arabia', coordinates: [[[[34, 32], [34, 16], [55, 16], [55, 32], [34, 32]]]] },
-    { id: 'tur', name: 'Turkey', coordinates: [[[[26, 42], [26, 36], [44, 36], [44, 42], [26, 42]]]] },
-    { id: 'kor', name: 'South Korea', coordinates: [[[[125, 38], [125, 33], [130, 33], [130, 38], [125, 38]]]] },
-  ];
+  if (COUNTRIES.length > 0) return COUNTRIES;
+  
+  try {
+    const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    const topology = await response.json() as Topology<{ countries: GeometryCollection }>;
+    
+    // Convert TopoJSON to GeoJSON features
+    const geojson = topojson.feature(topology, topology.objects.countries);
+    
+    if (geojson.type === 'FeatureCollection') {
+      COUNTRIES = geojson.features.map((feature) => {
+        const geom = feature.geometry;
+        let coordinates: number[][][][] = [];
+        
+        if (geom.type === 'Polygon') {
+          coordinates = [geom.coordinates as number[][][]];
+        } else if (geom.type === 'MultiPolygon') {
+          coordinates = geom.coordinates as number[][][][];
+        }
+        
+        const props = feature.properties as { name?: string } | null;
+        return {
+          id: String(feature.id || props?.name || Math.random()),
+          name: props?.name || 'Unknown',
+          coordinates,
+        };
+      });
+    }
+    
+    console.log(`Loaded ${COUNTRIES.length} countries with accurate borders`);
+    return COUNTRIES;
+  } catch (e) {
+    console.error('Failed to load countries:', e);
+    return COUNTRIES;
+  }
 }
 
 // Check if a point is inside a polygon ring (ray casting)
