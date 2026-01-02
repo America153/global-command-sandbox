@@ -14,7 +14,21 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions, getVisibleEnemyBases, getVisibleEnemyUnits } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions, aiEnemy } = useGameStore();
+  
+  // Check if player has intel capability for enemy unit visibility
+  const hasIntelBase = useMemo(() => bases.some(b => b.type === 'intelligence' && b.faction === 'player'), [bases]);
+  
+  // Compute visible enemy entities based on revealed bases and intel capability
+  const visibleEnemyBases = useMemo(() => 
+    aiEnemy.bases.filter(base => aiEnemy.revealedBases.includes(base.id)),
+    [aiEnemy.bases, aiEnemy.revealedBases]
+  );
+  
+  const visibleEnemyUnits = useMemo(() => 
+    hasIntelBase ? aiEnemy.units : [],
+    [hasIntelBase, aiEnemy.units]
+  );
 
   // Handle resize
   useEffect(() => {
@@ -112,11 +126,6 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       default: return '●';
     }
   };
-
-  // Get visible enemy entities
-  const visibleEnemyBases = useMemo(() => getVisibleEnemyBases(), [getVisibleEnemyBases]);
-  const visibleEnemyUnits = useMemo(() => getVisibleEnemyUnits(), [getVisibleEnemyUnits]);
-
   // Flat labels for player bases (rendered on globe surface)
   const baseLabels = useMemo(() => {
     const allBases = [...bases, ...visibleEnemyBases];
