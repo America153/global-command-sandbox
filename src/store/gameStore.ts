@@ -12,7 +12,8 @@ import type {
   TerritoryInfluence
 } from '@/types/game';
 import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
-import { findCountryAtPosition, COUNTRIES } from '@/data/countries';
+import { findCountryAtPosition } from '@/data/countries';
+import { getNextPosition } from '@/engine/terrain';
 
 interface DeploymentState {
   isActive: boolean;
@@ -296,13 +297,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
           return { ...unit, status: 'idle' as const, destination: undefined };
         }
 
-        const speed = 0.01 * state.speed; // Simplified movement
-        const ratio = Math.min(speed / distance, 1);
+        // Get unit domain from template for terrain-aware movement
+        const template = UNIT_TEMPLATES[unit.templateType];
+        const domain = template?.domain || 'land';
         
-        const newPosition = {
-          latitude: unit.position.latitude + dy * ratio,
-          longitude: unit.position.longitude + dx * ratio,
-        };
+        // Calculate next position with terrain awareness
+        const { position: newPosition, blocked } = getNextPosition(
+          unit.position,
+          unit.destination,
+          domain,
+          0.01 * state.speed
+        );
+        
+        if (blocked) {
+          // Unit is blocked by terrain - log once and keep trying
+          return unit; // Stay in place
+        }
         
         // Check if unit crossed into new country during movement
         const country = findCountryAtPosition(newPosition.latitude, newPosition.longitude);
