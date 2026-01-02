@@ -193,21 +193,22 @@ export function generateCountryDefenses(
     return { bases: [], units: [] };
   }
 
-  // Number of bases scales with power (1-3 bases)
-  const numBases = Math.min(3, Math.ceil(power / 2));
+  // Number of bases scales with power (2-5 bases)
+  const numBases = Math.min(5, 1 + power);
 
-  // Base types depend on power level
-  const availableBaseTypes: BaseType[] = ['army'];
-  if (power >= 2) availableBaseTypes.push('airforce');
-  if (power >= 3) availableBaseTypes.push('missile');
-  if (power >= 4) availableBaseTypes.push('intelligence');
+  // All base types available for dynamic mix
+  const allBaseTypes: BaseType[] = ['army', 'navy', 'airforce', 'intelligence'];
+  
+  // Shuffle and pick random base types for variety
+  const shuffledTypes = [...allBaseTypes].sort(() => Math.random() - 0.5);
 
   // Get geologically accurate positions spread across the country
   const basePositions = getSpreadPointsInCountry(country, numBases);
 
   // Generate bases at spread positions within country borders
   for (let i = 0; i < numBases; i++) {
-    const baseType = availableBaseTypes[i % availableBaseTypes.length];
+    // Pick a random base type from shuffled list (cycle through)
+    const baseType = shuffledTypes[i % shuffledTypes.length];
     const basePosition = basePositions[i];
 
     const base: Base = {
@@ -255,18 +256,21 @@ function generateUnitsForBase(
   const unitCount = Math.min(8, 1 + power);
 
   const unitTypesForBase: Record<BaseType, UnitType[]> = {
-    hq: ['infantry', 'armor'],
-    army: ['infantry', 'armor', 'artillery', 'air_defense'],
-    navy: ['destroyer', 'frigate', 'submarine'],
-    airforce: ['fighter', 'bomber', 'helicopter', 'drone'],
-    intelligence: ['special_forces', 'intel_team', 'drone'],
-    missile: ['infantry', 'air_defense'],
+    hq: ['infantry', 'armor', 'engineer'],
+    army: ['infantry', 'armor', 'artillery', 'air_defense', 'special_forces'],
+    navy: ['destroyer', 'frigate', 'submarine', 'carrier', 'amphibious'],
+    airforce: ['fighter', 'bomber', 'helicopter', 'drone', 'transport'],
+    intelligence: ['special_forces', 'intel_team', 'drone', 'cyber_team'],
+    missile: ['infantry', 'air_defense', 'armor'],
   };
 
   const availableTypes = unitTypesForBase[base.type] || ['infantry'];
+  
+  // Shuffle unit types for variety
+  const shuffledUnitTypes = [...availableTypes].sort(() => Math.random() - 0.5);
 
   for (let i = 0; i < unitCount; i++) {
-    const unitType = availableTypes[i % availableTypes.length];
+    const unitType = shuffledUnitTypes[i % shuffledUnitTypes.length];
 
     // Get position near base but within country borders
     let unitPosition: Coordinates;
