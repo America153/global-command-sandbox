@@ -32,7 +32,7 @@ export default function MissileTracker() {
                   <Rocket className="w-3 h-3" />
                   {template.name}
                 </span>
-                <span className="font-mono text-destructive animate-pulse">
+                <span className="font-mono text-destructive text-[10px]">
                   T-{secondsRemaining}s
                 </span>
               </div>
@@ -54,7 +54,7 @@ export default function MissileTracker() {
               
               {/* Impact warning when close */}
               {secondsRemaining <= 3 && (
-                <div className="text-[10px] text-destructive font-mono animate-pulse text-center">
+                <div className="text-[8px] text-destructive font-mono text-center">
                   ⚠️ IMPACT IMMINENT ⚠️
                 </div>
               )}

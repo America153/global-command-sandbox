@@ -187,8 +187,8 @@ export default function BaseDetailsPanel() {
             )}
 
             {missileTargeting.isActive && missileTargeting.baseId === selectedBase.id && (
-              <div className="p-3 bg-destructive/20 border border-destructive rounded animate-pulse">
-                <p className="text-sm font-mono text-destructive text-center">
+              <div className="p-3 bg-destructive/20 border border-destructive rounded">
+                <p className="text-[10px] font-mono text-destructive text-center">
                   🎯 Click on the globe to select target location
                 </p>
                 <button
