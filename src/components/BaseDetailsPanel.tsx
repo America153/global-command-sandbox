@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { BASE_CONFIG, UNIT_TEMPLATES, MISSILE_TEMPLATES } from '@/types/game';
 import type { UnitType, BaseType, MissileType } from '@/types/game';
@@ -16,7 +16,7 @@ const ALLOWED_UNITS: Record<BaseType, UnitType[]> = {
   missile: [], // No units, only missiles
 };
 
-export default function BaseDetailsPanel() {
+const BaseDetailsPanel = forwardRef<HTMLDivElement>(function BaseDetailsPanel(_, ref) {
   const { 
     selectedBase, selectBase, produceUnit, resources, units, addLog, startDeployment,
     missileTargeting, startMissileTargeting, cancelMissileTargeting
@@ -303,4 +303,6 @@ export default function BaseDetailsPanel() {
       </div>
     </div>
   );
-}
+});
+
+export default BaseDetailsPanel;
