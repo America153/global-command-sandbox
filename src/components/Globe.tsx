@@ -64,8 +64,16 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     globe.pointOfView({ altitude: 2.5 });
   }, [isLoaded, dimensions]);
 
-  const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null) => {
-    if (coords) {
+  const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null, event?: MouseEvent) => {
+    console.log('Globe clicked:', coords);
+    if (coords && coords.lat !== undefined && coords.lng !== undefined) {
+      onGlobeClick(coords.lat, coords.lng);
+    }
+  }, [onGlobeClick]);
+
+  const handlePolygonClick = useCallback((polygon: any, event: MouseEvent, coords: { lat: number; lng: number }) => {
+    console.log('Polygon clicked:', coords);
+    if (coords && coords.lat !== undefined && coords.lng !== undefined) {
       onGlobeClick(coords.lat, coords.lng);
     }
   }, [onGlobeClick]);
@@ -134,6 +142,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         polygonSideColor={() => 'rgba(40, 60, 90, 0.4)'}
         polygonStrokeColor={() => '#ffffff'}
         polygonAltitude={0.006}
+        onPolygonClick={handlePolygonClick}
         pointsData={allPoints}
         pointLat="lat"
         pointLng="lng"
