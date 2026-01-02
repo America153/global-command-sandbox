@@ -270,22 +270,22 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
     countryDataSource.entities.removeAll();
 
-    const BORDER_WIDTH = 3;
+    const BORDER_WIDTH = 2;
     const HOME_COLOR = Cesium.Color.fromCssColorString('#3b82f6'); // Blue
     const OCCUPIED_COLOR = Cesium.Color.fromCssColorString('#ef4444'); // Red
-    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#4b5563'); // Gray
+    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#6b7280'); // Gray
 
     COUNTRIES.forEach((country) => {
       try {
         let borderColor = NEUTRAL_COLOR;
-        let fillColor: Cesium.Color | undefined = undefined;
+        let borderWidth = BORDER_WIDTH;
 
         if (country.id === homeCountryId) {
           borderColor = HOME_COLOR;
-          fillColor = HOME_COLOR.withAlpha(0.2);
+          borderWidth = 4;
         } else if (occupiedCountryIds.includes(country.id)) {
           borderColor = OCCUPIED_COLOR;
-          fillColor = OCCUPIED_COLOR.withAlpha(0.2);
+          borderWidth = 4;
         }
 
         // Handle MultiPolygon - each polygon is a separate landmass
@@ -295,37 +295,28 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
           const ring = polygon[0];
           if (!Array.isArray(ring) || ring.length < 3) continue;
 
-          // Convert coordinates for Cesium [lng, lat] -> flat array
-          const positions: number[] = [];
+          // Convert coordinates for Cesium [lng, lat] -> Cartesian3 array
+          const cartesianPositions: Cesium.Cartesian3[] = [];
           for (const coord of ring) {
             if (Array.isArray(coord) && coord.length >= 2) {
-              positions.push(coord[0], coord[1]);
+              cartesianPositions.push(Cesium.Cartesian3.fromDegrees(coord[0], coord[1]));
             }
           }
 
-          if (positions.length < 6) continue; // Need at least 3 points
+          if (cartesianPositions.length < 3) continue;
 
-          // Add polyline border for visibility
+          // Close the ring
+          cartesianPositions.push(cartesianPositions[0]);
+
+          // Add polyline border only (no polygon fills to avoid antimeridian issues)
           countryDataSource.entities.add({
             polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArray(positions),
-              width: BORDER_WIDTH,
+              positions: cartesianPositions,
+              width: borderWidth,
               material: borderColor,
               clampToGround: true,
             },
           });
-
-          // Add fill for controlled countries
-          if (fillColor) {
-            countryDataSource.entities.add({
-              polygon: {
-                hierarchy: Cesium.Cartesian3.fromDegreesArray(positions),
-                material: fillColor,
-                outline: false,
-                height: 0,
-              },
-            });
-          }
         }
       } catch (e) {
         // Skip malformed country data
