@@ -55,6 +55,27 @@ interface Loan {
   takenAtTick: number;
 }
 
+interface Stock {
+  id: string;
+  name: string;
+  symbol: string;
+  price: number;
+  previousPrice: number;
+  volatility: number;
+  sector: 'defense' | 'tech' | 'energy' | 'finance';
+}
+
+const INITIAL_STOCKS: Stock[] = [
+  { id: 'lmt', name: 'Lockheed Martin', symbol: 'LMT', price: 450, previousPrice: 450, volatility: 0.03, sector: 'defense' },
+  { id: 'rtn', name: 'Raytheon Tech', symbol: 'RTN', price: 320, previousPrice: 320, volatility: 0.04, sector: 'defense' },
+  { id: 'ba', name: 'Boeing', symbol: 'BA', price: 180, previousPrice: 180, volatility: 0.05, sector: 'defense' },
+  { id: 'nvda', name: 'NVIDIA', symbol: 'NVDA', price: 890, previousPrice: 890, volatility: 0.06, sector: 'tech' },
+  { id: 'msft', name: 'Microsoft', symbol: 'MSFT', price: 420, previousPrice: 420, volatility: 0.025, sector: 'tech' },
+  { id: 'xom', name: 'ExxonMobil', symbol: 'XOM', price: 110, previousPrice: 110, volatility: 0.035, sector: 'energy' },
+  { id: 'cvx', name: 'Chevron', symbol: 'CVX', price: 155, previousPrice: 155, volatility: 0.03, sector: 'energy' },
+  { id: 'jpm', name: 'JPMorgan Chase', symbol: 'JPM', price: 195, previousPrice: 195, volatility: 0.025, sector: 'finance' },
+];
+
 interface MissileInFlight {
   id: string;
   startPosition: Coordinates;
@@ -129,6 +150,15 @@ interface GameStore extends GameState {
   loans: Loan[];
   takeLoan: (amount: number) => void;
   payLoan: (loanId: string, amount: number) => void;
+  // Stock market system
+  stocks: Stock[];
+  portfolio: Record<string, number>;
+  buyStock: (stockId: string, quantity: number) => void;
+  sellStock: (stockId: string, quantity: number) => void;
+  updateStockPrices: () => void;
+  // Unit selection
+  selectedUnit: Unit | null;
+  selectUnit: (unit: Unit | null) => void;
 }
 
 const initialState: GameState & { 
@@ -145,6 +175,9 @@ const initialState: GameState & {
   diplomacy: DiplomacyState;
   lastRetaliationTick: number;
   loans: Loan[];
+  stocks: Stock[];
+  portfolio: Record<string, number>;
+  selectedUnit: Unit | null;
 } = {
   tick: 0,
   speed: 1,
@@ -168,6 +201,9 @@ const initialState: GameState & {
   capturedCountryIds: [],
   struckCountryIds: [],
   loans: [],
+  stocks: INITIAL_STOCKS,
+  portfolio: {},
+  selectedUnit: null,
   missileTargeting: {
     isActive: false,
     baseId: null,
@@ -876,4 +912,57 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     get().addLog('info', `💵 Paid $${paymentAmount.toLocaleString()} towards loan`);
   },
+
+  // Stock market actions
+  buyStock: (stockId, quantity) => {
+    const state = get();
+    const stock = state.stocks.find(s => s.id === stockId);
+    if (!stock) return;
+    
+    const totalCost = stock.price * quantity;
+    if (state.resources < totalCost) return;
+
+    const currentHolding = state.portfolio[stockId] || 0;
+    set({
+      resources: state.resources - totalCost,
+      portfolio: { ...state.portfolio, [stockId]: currentHolding + quantity },
+    });
+    get().addLog('info', `📈 Bought ${quantity} shares of ${stock.symbol} for $${totalCost.toLocaleString()}`);
+  },
+
+  sellStock: (stockId, quantity) => {
+    const state = get();
+    const stock = state.stocks.find(s => s.id === stockId);
+    if (!stock) return;
+    
+    const currentHolding = state.portfolio[stockId] || 0;
+    const sellQuantity = Math.min(quantity, currentHolding);
+    if (sellQuantity <= 0) return;
+
+    const totalValue = stock.price * sellQuantity;
+    const newHolding = currentHolding - sellQuantity;
+    
+    set({
+      resources: state.resources + totalValue,
+      portfolio: { ...state.portfolio, [stockId]: newHolding },
+    });
+    get().addLog('info', `📉 Sold ${sellQuantity} shares of ${stock.symbol} for $${totalValue.toLocaleString()}`);
+  },
+
+  updateStockPrices: () => {
+    const state = get();
+    const updatedStocks = state.stocks.map(stock => {
+      // Random price change based on volatility
+      const change = (Math.random() - 0.5) * 2 * stock.volatility;
+      const newPrice = Math.max(1, stock.price * (1 + change));
+      return {
+        ...stock,
+        previousPrice: stock.price,
+        price: Math.round(newPrice * 100) / 100,
+      };
+    });
+    set({ stocks: updatedStocks });
+  },
+
+  selectUnit: (unit) => set({ selectedUnit: unit, selectedBase: null, selectedTool: null }),
 }));
