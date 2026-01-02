@@ -144,8 +144,9 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-dark.jpg"
+        globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+        bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
         polygonsData={countriesData.features}
         polygonCapColor={getPolygonColor}
         polygonSideColor={() => 'rgba(40, 60, 90, 0.4)'}
