@@ -111,6 +111,18 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     color: unit.faction === 'player' ? '#22c55e' : '#ef4444',
   })), [units]);
 
+  // Movement arcs for units with destinations
+  const movementArcs = useMemo(() => units
+    .filter(unit => unit.status === 'moving' && unit.destination)
+    .map(unit => ({
+      startLat: unit.position.latitude,
+      startLng: unit.position.longitude,
+      endLat: unit.destination!.latitude,
+      endLng: unit.destination!.longitude,
+      color: unit.faction === 'player' ? ['#22c55e', '#86efac'] : ['#ef4444', '#fca5a5'],
+      name: unit.name,
+    })), [units]);
+
   const allPoints = useMemo(() => [...basePoints, ...unitPoints], [basePoints, unitPoints]);
 
   if (!isLoaded || dimensions.width === 0) {
@@ -151,6 +163,18 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
             useGameStore.getState().selectBase(point.base);
           }
         }}
+        arcsData={movementArcs}
+        arcStartLat="startLat"
+        arcStartLng="startLng"
+        arcEndLat="endLat"
+        arcEndLng="endLng"
+        arcColor="color"
+        arcDashLength={0.4}
+        arcDashGap={0.2}
+        arcDashAnimateTime={1500}
+        arcStroke={0.5}
+        arcAltitudeAutoScale={0.3}
+        arcLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px; color: white;">Moving: ${d.name}</div>`}
         atmosphereColor="#1e40af"
         atmosphereAltitude={0.15}
       />
