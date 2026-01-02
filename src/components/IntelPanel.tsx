@@ -14,10 +14,10 @@ export default function IntelPanel() {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Check if player has intel capability
-  const hasIntelBase = bases.some(b => b.type === 'intelligence');
+  const hasIntelBase = bases.some((b) => b.type === 'intelligence' && b.faction === 'player');
   
   // Compute visible enemy entities reactively
-  const visibleEnemyBases = aiEnemy.bases.filter(base => aiEnemy.revealedBases.includes(base.id));
+  const visibleEnemyBases = aiEnemy.bases.filter((base) => aiEnemy.revealedBases.includes(base.id));
   const visibleEnemyUnits = hasIntelBase ? aiEnemy.units : [];
 
   useEffect(() => {
