@@ -118,18 +118,17 @@ export default function IntelPanel() {
             <div 
               key={log.id}
               className={`
-                flex items-start gap-2 p-2 rounded text-xs font-mono
+                flex items-start gap-1 p-1.5 rounded text-[10px] font-mono
                 ${log.type === 'warning' ? 'bg-accent/10 border border-accent/30' : ''}
                 ${log.type === 'combat' ? 'bg-destructive/10 border border-destructive/30' : ''}
                 ${log.type === 'production' ? 'bg-friendly/10 border border-friendly/30' : ''}
                 ${log.type === 'info' || log.type === 'intel' || log.type === 'movement' ? 'bg-muted/20' : ''}
-                animate-fade-in-up
               `}
             >
               {getLogIcon(log.type)}
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] text-muted-foreground">T+{log.timestamp}</div>
-                <div className="text-foreground break-words">{log.message}</div>
+                <div className="text-[8px] text-muted-foreground">T+{log.timestamp}</div>
+                <div className="text-foreground break-words text-[9px]">{log.message}</div>
               </div>
             </div>
           ))
@@ -141,7 +140,7 @@ export default function IntelPanel() {
       <div className="border-t border-border p-2 bg-muted/30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-friendly animate-pulse" />
+            <div className="w-2 h-2 rounded-full bg-friendly" />
             <span className="text-[10px] font-mono text-muted-foreground">LINK ACTIVE</span>
           </div>
           <span className="text-[10px] font-mono text-muted-foreground">
