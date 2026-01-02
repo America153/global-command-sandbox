@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { useGameStore } from '@/store/gameStore';
-import { COUNTRIES } from '@/data/countries';
+import { COUNTRIES, loadCountries } from '@/data/countries';
 
 // Configure Cesium
 (window as any).CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/';
@@ -19,6 +19,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const countryDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
   const onGlobeClickRef = useRef(onGlobeClick);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [countriesLoaded, setCountriesLoaded] = useState(false);
   
   const { hq, bases, units, territories, selectBase, homeCountryId, occupiedCountryIds } = useGameStore();
 
@@ -255,59 +256,82 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     });
   }, [hq, bases, units, territories, isLoaded]);
 
+  // Load country data
+  useEffect(() => {
+    loadCountries().then(() => {
+      setCountriesLoaded(true);
+    });
+  }, []);
+
   // Render country borders and territory control
   useEffect(() => {
     const countryDataSource = countryDataSourceRef.current;
-    if (!countryDataSource || !isLoaded) return;
+    if (!countryDataSource || !isLoaded || !countriesLoaded) return;
 
     countryDataSource.entities.removeAll();
 
-    const BORDER_WIDTH = 4;
+    const BORDER_WIDTH = 3;
     const HOME_COLOR = Cesium.Color.fromCssColorString('#3b82f6'); // Blue
     const OCCUPIED_COLOR = Cesium.Color.fromCssColorString('#ef4444'); // Red
-    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#6b7280'); // Gray
+    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#4b5563'); // Gray
 
     COUNTRIES.forEach((country) => {
-      let borderColor = NEUTRAL_COLOR;
-      let fillColor: Cesium.Color | undefined = undefined;
+      try {
+        let borderColor = NEUTRAL_COLOR;
+        let fillColor: Cesium.Color | undefined = undefined;
 
-      if (country.id === homeCountryId) {
-        borderColor = HOME_COLOR;
-        fillColor = HOME_COLOR.withAlpha(0.15);
-      } else if (occupiedCountryIds.includes(country.id)) {
-        borderColor = OCCUPIED_COLOR;
-        fillColor = OCCUPIED_COLOR.withAlpha(0.15);
+        if (country.id === homeCountryId) {
+          borderColor = HOME_COLOR;
+          fillColor = HOME_COLOR.withAlpha(0.2);
+        } else if (occupiedCountryIds.includes(country.id)) {
+          borderColor = OCCUPIED_COLOR;
+          fillColor = OCCUPIED_COLOR.withAlpha(0.2);
+        }
+
+        // Handle MultiPolygon - each polygon is a separate landmass
+        for (const polygon of country.coordinates) {
+          if (!Array.isArray(polygon) || polygon.length === 0) continue;
+          
+          const ring = polygon[0];
+          if (!Array.isArray(ring) || ring.length < 3) continue;
+
+          // Convert coordinates for Cesium [lng, lat] -> flat array
+          const positions: number[] = [];
+          for (const coord of ring) {
+            if (Array.isArray(coord) && coord.length >= 2) {
+              positions.push(coord[0], coord[1]);
+            }
+          }
+
+          if (positions.length < 6) continue; // Need at least 3 points
+
+          // Add polyline border for visibility
+          countryDataSource.entities.add({
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray(positions),
+              width: BORDER_WIDTH,
+              material: borderColor,
+              clampToGround: true,
+            },
+          });
+
+          // Add fill for controlled countries
+          if (fillColor) {
+            countryDataSource.entities.add({
+              polygon: {
+                hierarchy: Cesium.Cartesian3.fromDegreesArray(positions),
+                material: fillColor,
+                outline: false,
+                height: 0,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        // Skip malformed country data
       }
-
-      // Convert coordinates for Cesium
-      const positions: number[] = [];
-      country.coordinates[0].forEach(([lng, lat]) => {
-        positions.push(lng, lat);
-      });
-
-      // Add country polygon with border
-      countryDataSource.entities.add({
-        polygon: {
-          hierarchy: Cesium.Cartesian3.fromDegreesArray(positions),
-          material: fillColor || Cesium.Color.TRANSPARENT,
-          outline: true,
-          outlineColor: borderColor,
-          outlineWidth: BORDER_WIDTH,
-          height: 0,
-        },
-      });
-
-      // Add thicker polyline border for better visibility
-      countryDataSource.entities.add({
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(positions),
-          width: BORDER_WIDTH,
-          material: borderColor,
-          clampToGround: true,
-        },
-      });
     });
-  }, [homeCountryId, occupiedCountryIds, isLoaded]);
+  }, [homeCountryId, occupiedCountryIds, isLoaded, countriesLoaded]);
 
   return (
     <div className="relative w-full h-full">

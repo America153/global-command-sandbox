@@ -12,7 +12,7 @@ import type {
   TerritoryInfluence
 } from '@/types/game';
 import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
-import { findCountryAtPosition } from '@/data/countries';
+import { findCountryAtPosition, COUNTRIES } from '@/data/countries';
 
 interface DeploymentState {
   isActive: boolean;
