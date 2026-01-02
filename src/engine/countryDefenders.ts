@@ -1,8 +1,9 @@
-// Dynamic Country Defense System - Spawns defenders when player crosses borders
+// Dynamic Country Defense System - Spawns defenders within actual country borders
 
 import { v4 as uuidv4 } from 'uuid';
 import type { Base, Unit, Coordinates, BaseType, UnitType } from '@/types/game';
 import { BASE_CONFIG } from '@/types/game';
+import { COUNTRIES, isPointInCountry, type CountryData } from '@/data/countries';
 
 // Country military power ratings (simplified - major countries get more defenders)
 // Scale: 1 = minimal, 5 = superpower level
@@ -53,36 +54,161 @@ export function getCountryPower(countryId: string): number {
   return COUNTRY_POWER[countryId] || 1;
 }
 
-// Generate defender bases for a country when invaded
+// Calculate centroid of a country's polygon (approximate center)
+function calculateCountryCentroid(country: CountryData): Coordinates {
+  let totalLat = 0;
+  let totalLng = 0;
+  let pointCount = 0;
+
+  for (const polygon of country.coordinates) {
+    if (!Array.isArray(polygon) || polygon.length === 0) continue;
+    const ring = polygon[0];
+    if (!Array.isArray(ring)) continue;
+
+    for (const coord of ring) {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        totalLng += coord[0];
+        totalLat += coord[1];
+        pointCount++;
+      }
+    }
+  }
+
+  if (pointCount === 0) {
+    return { latitude: 0, longitude: 0 };
+  }
+
+  return {
+    latitude: totalLat / pointCount,
+    longitude: totalLng / pointCount,
+  };
+}
+
+// Get bounding box for a country
+function getCountryBounds(country: CountryData): {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+} {
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+
+  for (const polygon of country.coordinates) {
+    if (!Array.isArray(polygon) || polygon.length === 0) continue;
+    const ring = polygon[0];
+    if (!Array.isArray(ring)) continue;
+
+    for (const coord of ring) {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        minLng = Math.min(minLng, coord[0]);
+        maxLng = Math.max(maxLng, coord[0]);
+        minLat = Math.min(minLat, coord[1]);
+        maxLat = Math.max(maxLat, coord[1]);
+      }
+    }
+  }
+
+  return { minLat, maxLat, minLng, maxLng };
+}
+
+// Find a random point inside a country's actual borders
+function getRandomPointInCountry(country: CountryData, maxAttempts: number = 50): Coordinates {
+  const bounds = getCountryBounds(country);
+  const centroid = calculateCountryCentroid(country);
+
+  // Try random points within the bounding box
+  for (let i = 0; i < maxAttempts; i++) {
+    const lat = bounds.minLat + Math.random() * (bounds.maxLat - bounds.minLat);
+    const lng = bounds.minLng + Math.random() * (bounds.maxLng - bounds.minLng);
+
+    if (isPointInCountry(lat, lng, country)) {
+      return { latitude: lat, longitude: lng };
+    }
+  }
+
+  // Fallback to centroid if we can't find a point
+  return centroid;
+}
+
+// Generate multiple spread-out points within a country
+function getSpreadPointsInCountry(country: CountryData, count: number): Coordinates[] {
+  const points: Coordinates[] = [];
+  const bounds = getCountryBounds(country);
+
+  // Divide the country into rough grid cells and place points
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const cellWidth = (bounds.maxLng - bounds.minLng) / cols;
+  const cellHeight = (bounds.maxLat - bounds.minLat) / rows;
+
+  for (let i = 0; i < count; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+
+    // Random point within this cell
+    const cellMinLng = bounds.minLng + col * cellWidth;
+    const cellMinLat = bounds.minLat + row * cellHeight;
+
+    // Try to find a point in this cell that's inside the country
+    let found = false;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const lat = cellMinLat + Math.random() * cellHeight;
+      const lng = cellMinLng + Math.random() * cellWidth;
+
+      if (isPointInCountry(lat, lng, country)) {
+        points.push({ latitude: lat, longitude: lng });
+        found = true;
+        break;
+      }
+    }
+
+    // If not found in cell, try random point anywhere in country
+    if (!found) {
+      points.push(getRandomPointInCountry(country));
+    }
+  }
+
+  return points;
+}
+
+// Generate defender bases for a country when invaded - NOW WITH GEOLOGICAL ACCURACY
 export function generateCountryDefenses(
   countryId: string,
   countryName: string,
-  entryPosition: Coordinates,
+  _entryPosition: Coordinates, // kept for API compatibility
   currentTick: number
 ): { bases: Base[]; units: Unit[] } {
   const power = getCountryPower(countryId);
   const bases: Base[] = [];
   const units: Unit[] = [];
 
+  // Find the country data for accurate polygon placement
+  const country = COUNTRIES.find((c) => c.id === countryId);
+  if (!country) {
+    // Fallback if country not found - shouldn't happen
+    console.warn(`Country ${countryId} not found for defense spawning`);
+    return { bases: [], units: [] };
+  }
+
   // Number of bases scales with power (1-3 bases)
   const numBases = Math.min(3, Math.ceil(power / 2));
-  
+
   // Base types depend on power level
   const availableBaseTypes: BaseType[] = ['army'];
   if (power >= 2) availableBaseTypes.push('airforce');
   if (power >= 3) availableBaseTypes.push('missile');
   if (power >= 4) availableBaseTypes.push('intelligence');
 
-  // Generate bases spread around the entry point
+  // Get geologically accurate positions spread across the country
+  const basePositions = getSpreadPointsInCountry(country, numBases);
+
+  // Generate bases at spread positions within country borders
   for (let i = 0; i < numBases; i++) {
-    const angle = (i / numBases) * Math.PI * 2 + Math.random() * 0.5;
-    const distance = 2 + Math.random() * 3; // 2-5 degrees away
-    
     const baseType = availableBaseTypes[i % availableBaseTypes.length];
-    const basePosition: Coordinates = {
-      latitude: entryPosition.latitude + Math.sin(angle) * distance,
-      longitude: entryPosition.longitude + Math.cos(angle) * distance,
-    };
+    const basePosition = basePositions[i];
 
     const base: Base = {
       id: `defender-${countryId}-base-${i}`,
@@ -99,24 +225,32 @@ export function generateCountryDefenses(
 
     bases.push(base);
 
-    // Generate units for each base
-    const unitsForBase = generateUnitsForBase(base, power, countryName, units.length, currentTick);
+    // Generate units for each base - also within country borders
+    const unitsForBase = generateUnitsForBase(
+      base,
+      power,
+      countryName,
+      units.length,
+      currentTick,
+      country
+    );
     units.push(...unitsForBase);
   }
 
   return { bases, units };
 }
 
-// Generate appropriate units for a base
+// Generate appropriate units for a base - units spawn within country borders
 function generateUnitsForBase(
   base: Base,
   power: number,
   countryName: string,
   existingUnitCount: number,
-  currentTick: number
+  currentTick: number,
+  country: CountryData
 ): Unit[] {
   const units: Unit[] = [];
-  
+
   // Base unit count on power level (2-8 units per base)
   const unitCount = Math.min(8, 1 + power);
 
@@ -133,19 +267,41 @@ function generateUnitsForBase(
 
   for (let i = 0; i < unitCount; i++) {
     const unitType = availableTypes[i % availableTypes.length];
-    
-    // Slight position offset so units don't stack exactly
-    const offset = 0.1 + Math.random() * 0.2;
+
+    // Get position near base but within country borders
+    let unitPosition: Coordinates;
+    const offset = 0.1 + Math.random() * 0.3;
     const angle = Math.random() * Math.PI * 2;
+    const candidateLat = base.position.latitude + Math.sin(angle) * offset;
+    const candidateLng = base.position.longitude + Math.cos(angle) * offset;
+
+    // Verify it's within country, otherwise use base position
+    if (isPointInCountry(candidateLat, candidateLng, country)) {
+      unitPosition = { latitude: candidateLat, longitude: candidateLng };
+    } else {
+      // Try to find a valid nearby position
+      let found = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const tryOffset = 0.05 + Math.random() * 0.15;
+        const tryAngle = Math.random() * Math.PI * 2;
+        const tryLat = base.position.latitude + Math.sin(tryAngle) * tryOffset;
+        const tryLng = base.position.longitude + Math.cos(tryAngle) * tryOffset;
+        if (isPointInCountry(tryLat, tryLng, country)) {
+          unitPosition = { latitude: tryLat, longitude: tryLng };
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        unitPosition = { ...base.position };
+      }
+    }
 
     const unit: Unit = {
       id: uuidv4(),
       templateType: unitType,
       name: `${countryName} ${unitType.replace('_', ' ')} ${existingUnitCount + i + 1}`,
-      position: {
-        latitude: base.position.latitude + Math.sin(angle) * offset,
-        longitude: base.position.longitude + Math.cos(angle) * offset,
-      },
+      position: unitPosition,
       faction: 'ai',
       health: 100,
       maxHealth: 100,
@@ -165,7 +321,7 @@ export function getExpectedDefenderCount(countryId: string): { bases: number; un
   const power = getCountryPower(countryId);
   const numBases = Math.min(3, Math.ceil(power / 2));
   const unitsPerBase = Math.min(8, 1 + power);
-  
+
   return {
     bases: numBases,
     units: numBases * unitsPerBase,
