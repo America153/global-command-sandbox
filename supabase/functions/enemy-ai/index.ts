@@ -21,6 +21,12 @@ interface EnemyUnit {
   health: number;
 }
 
+// Input validation helper
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 // Calculate distance between two points in km
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
@@ -110,11 +116,27 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { sessionId, playerBases, currentTick } = await req.json();
-    
+    const body = await req.json();
+    const { sessionId, playerId, playerBases, currentTick } = body;
+
+    // Input validation
+    if (!sessionId || typeof sessionId !== 'string' || !isValidUUID(sessionId)) {
+      return new Response(JSON.stringify({ error: 'Invalid session ID' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!playerId || typeof playerId !== 'string') {
+      return new Response(JSON.stringify({ error: 'Player ID required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log(`[enemy-ai] Processing AI for session ${sessionId}, tick ${currentTick}`);
 
-    // Get session state
+    // Get session state and verify ownership
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('*')
@@ -125,6 +147,15 @@ Deno.serve(async (req) => {
       console.error('[enemy-ai] Session error:', sessionError);
       return new Response(JSON.stringify({ error: 'Session not found' }), {
         status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Verify session ownership
+    if (session.player_id !== playerId) {
+      console.warn(`[enemy-ai] Ownership mismatch: expected ${session.player_id}, got ${playerId}`);
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -200,7 +231,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[enemy-ai] Error:', error);
-    return new Response(JSON.stringify({ error: String(error) }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

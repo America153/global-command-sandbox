@@ -5,6 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const VALID_ACTIONS = ['create', 'load', 'save', 'damage_base', 'damage_unit'];
+
+// Input validation helper
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 // Initial enemy base configurations
 const INITIAL_ENEMY_BASES = [
   { type: 'hq', lat: 55.7558, lng: 37.6173, name: 'Red Coalition HQ', country: 'RUS' },
@@ -35,17 +43,53 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { action, sessionId, playerId, data } = await req.json();
+    const body = await req.json();
+    const { action, sessionId, playerId, data } = body;
+
+    // Input validation
+    if (!action || typeof action !== 'string' || !VALID_ACTIONS.includes(action)) {
+      return new Response(JSON.stringify({ error: 'Invalid action' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!playerId || typeof playerId !== 'string') {
+      return new Response(JSON.stringify({ error: 'Player ID required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // For non-create actions, validate sessionId
+    if (action !== 'create') {
+      if (!sessionId || typeof sessionId !== 'string' || !isValidUUID(sessionId)) {
+        return new Response(JSON.stringify({ error: 'Invalid session ID' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
     
     console.log(`[game-state] Action: ${action}, Session: ${sessionId}`);
 
     switch (action) {
       case 'create': {
+        // Sanitize playerId - only allow alphanumeric, hyphens, and underscores
+        const sanitizedPlayerId = String(playerId).replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 128);
+        
+        if (!sanitizedPlayerId) {
+          return new Response(JSON.stringify({ error: 'Invalid player ID format' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         // Create new game session
         const { data: session, error: sessionError } = await supabase
           .from('game_sessions')
           .insert({
-            player_id: playerId || 'anonymous',
+            player_id: sanitizedPlayerId,
             resources: 1000,
             alert_level: 'peace',
           })
@@ -126,6 +170,15 @@ Deno.serve(async (req) => {
           });
         }
 
+        // Verify session ownership
+        if (session.player_id !== playerId) {
+          console.warn(`[game-state] Load ownership mismatch: expected ${session.player_id}, got ${playerId}`);
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const { data: bases } = await supabase
           .from('enemy_bases')
           .select('*')
@@ -155,17 +208,55 @@ Deno.serve(async (req) => {
       }
 
       case 'save': {
-        // Save game state
+        // First verify session ownership
+        const { data: session, error: sessionError } = await supabase
+          .from('game_sessions')
+          .select('player_id')
+          .eq('id', sessionId)
+          .maybeSingle();
+
+        if (sessionError || !session) {
+          return new Response(JSON.stringify({ error: 'Session not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        if (session.player_id !== playerId) {
+          console.warn(`[game-state] Save ownership mismatch: expected ${session.player_id}, got ${playerId}`);
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Validate and sanitize save data
+        if (!data || typeof data !== 'object') {
+          return new Response(JSON.stringify({ error: 'Invalid save data' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const { resources, alertLevel, capturedCountries, currentTick } = data;
+
+        // Validate data types
+        const safeResources = typeof resources === 'number' ? Math.max(0, Math.floor(resources)) : undefined;
+        const safeAlertLevel = ['peace', 'vigilant', 'hostile', 'war'].includes(alertLevel) ? alertLevel : undefined;
+        const safeCapturedCountries = Array.isArray(capturedCountries) 
+          ? capturedCountries.filter(c => typeof c === 'string').slice(0, 100) 
+          : undefined;
+        const safeCurrentTick = typeof currentTick === 'number' ? Math.max(0, Math.floor(currentTick)) : undefined;
+
+        const updateData: Record<string, any> = {};
+        if (safeResources !== undefined) updateData.resources = safeResources;
+        if (safeAlertLevel !== undefined) updateData.alert_level = safeAlertLevel;
+        if (safeCapturedCountries !== undefined) updateData.captured_countries = safeCapturedCountries;
+        if (safeCurrentTick !== undefined) updateData.last_tick = safeCurrentTick;
 
         const { error: updateError } = await supabase
           .from('game_sessions')
-          .update({
-            resources,
-            alert_level: alertLevel,
-            captured_countries: capturedCountries,
-            last_tick: currentTick,
-          })
+          .update(updateData)
           .eq('id', sessionId);
 
         if (updateError) throw updateError;
@@ -176,17 +267,54 @@ Deno.serve(async (req) => {
       }
 
       case 'damage_base': {
+        if (!data || typeof data !== 'object') {
+          return new Response(JSON.stringify({ error: 'Invalid damage data' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const { baseId, damage } = data;
+
+        if (!baseId || typeof baseId !== 'string' || !isValidUUID(baseId)) {
+          return new Response(JSON.stringify({ error: 'Invalid base ID' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        if (typeof damage !== 'number' || damage < 0) {
+          return new Response(JSON.stringify({ error: 'Invalid damage value' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         
+        // Get base and verify it belongs to the session
         const { data: base, error: baseError } = await supabase
           .from('enemy_bases')
-          .select('*')
+          .select('*, game_sessions!inner(player_id)')
           .eq('id', baseId)
           .single();
 
-        if (baseError) throw baseError;
+        if (baseError || !base) {
+          return new Response(JSON.stringify({ error: 'Base not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
-        const newHealth = Math.max(0, base.health - damage);
+        // Verify session ownership through the base's session
+        if ((base as any).game_sessions.player_id !== playerId) {
+          console.warn(`[game-state] Damage base ownership mismatch`);
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const safeDamage = Math.min(damage, 10000); // Cap damage to prevent overflow
+        const newHealth = Math.max(0, base.health - safeDamage);
         const isDestroyed = newHealth <= 0;
 
         await supabase
@@ -216,17 +344,54 @@ Deno.serve(async (req) => {
       }
 
       case 'damage_unit': {
+        if (!data || typeof data !== 'object') {
+          return new Response(JSON.stringify({ error: 'Invalid damage data' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const { unitId, damage } = data;
+
+        if (!unitId || typeof unitId !== 'string' || !isValidUUID(unitId)) {
+          return new Response(JSON.stringify({ error: 'Invalid unit ID' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        if (typeof damage !== 'number' || damage < 0) {
+          return new Response(JSON.stringify({ error: 'Invalid damage value' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         
+        // Get unit and verify it belongs to a session owned by the player
         const { data: unit, error: unitError } = await supabase
           .from('enemy_units')
-          .select('*')
+          .select('*, game_sessions!inner(player_id)')
           .eq('id', unitId)
           .single();
 
-        if (unitError) throw unitError;
+        if (unitError || !unit) {
+          return new Response(JSON.stringify({ error: 'Unit not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
-        const newHealth = Math.max(0, unit.health - damage);
+        // Verify session ownership through the unit's session
+        if ((unit as any).game_sessions.player_id !== playerId) {
+          console.warn(`[game-state] Damage unit ownership mismatch`);
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const safeDamage = Math.min(damage, 1000); // Cap damage to prevent overflow
+        const newHealth = Math.max(0, unit.health - safeDamage);
         const isDestroyed = newHealth <= 0;
 
         await supabase
@@ -255,7 +420,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[game-state] Error:', error);
-    return new Response(JSON.stringify({ error: String(error) }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
