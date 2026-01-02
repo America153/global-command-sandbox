@@ -80,15 +80,17 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     const rawId = feature?.id ?? feature?.properties?.id;
     const countryId = rawId != null ? String(rawId) : null;
 
+    // NOTE: use legacy hsla() syntax because react-globe.gl's color parser
+    // doesn't fully support the newer "hsl(... / a)" CSS format.
     if (countryId && homeCountryId && countryId === String(homeCountryId)) {
-      return 'hsl(217 91% 60% / 0.55)'; // Blue for HQ country
+      return 'hsla(217, 91%, 60%, 0.55)'; // Blue for HQ country
     }
 
     if (countryId && occupiedCountryIds.includes(countryId)) {
-      return 'hsl(0 84% 60% / 0.55)'; // Red for crossed/occupied
+      return 'hsla(0, 84%, 60%, 0.55)'; // Red for crossed/occupied
     }
 
-    return 'hsl(215 28% 17% / 0.85)'; // Default dark
+    return 'hsla(215, 28%, 17%, 0.85)'; // Default dark
   }, [homeCountryId, occupiedCountryIds]);
 
   // Prepare points data for bases and units
