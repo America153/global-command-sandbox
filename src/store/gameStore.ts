@@ -18,14 +18,12 @@ import { getNextPosition } from '@/engine/terrain';
 import { 
   AIEnemyState, 
   ENEMY_NATION, 
-  createInitialEnemyBases, 
-  createInitialEnemyUnits,
-  checkBorderViolation,
   checkMissileStrikes,
   calculateAIReaction,
   hasIntelligenceCapability,
   getVisibleEnemyEntities
 } from '@/engine/aiEnemy';
+import { generateCountryDefenses, getCountryPower } from '@/engine/countryDefenders';
 
 interface DeploymentState {
   isActive: boolean;
@@ -55,14 +53,11 @@ interface Explosion {
   duration: number; // ticks
 }
 
-// Initialize enemy state
-const initialEnemyBases = createInitialEnemyBases();
-const initialEnemyUnits = createInitialEnemyUnits(initialEnemyBases);
-
+// Initialize enemy state - now empty, enemies spawn dynamically when countries are invaded
 const initialAIEnemyState: AIEnemyState = {
   nation: ENEMY_NATION,
-  bases: initialEnemyBases,
-  units: initialEnemyUnits,
+  bases: [],
+  units: [],
   alertLevel: 'peace',
   revealedBases: [],
   lastReactionTick: 0,
@@ -522,70 +517,116 @@ export const useGameStore = create<GameStore>((set, get) => ({
       exp => currentTick - exp.startTick < exp.duration
     );
 
-    // === AI ENEMY REACTIONS ===
+    // === DYNAMIC COUNTRY DEFENSE SPAWNING ===
+    // When player units enter a NEW country, spawn defenders for that country
     let updatedAIEnemy = { ...state.aiEnemy };
+    const invadedCountryIds = new Set<string>();
 
-    // Check for border violations:
-    // 1) Country-based: if player units enter a country where enemy bases exist (matches "cross the border" expectation)
-    // 2) Distance-based fallback: if country data isn't loaded yet
-    const borderCheck = checkBorderViolation(updatedUnits, updatedAIEnemy.bases);
+    // Find all countries player units are currently in (that aren't home)
+    for (const unit of updatedUnits) {
+      if (unit.faction !== 'player') continue;
+      const country = findCountryAtPosition(unit.position.latitude, unit.position.longitude);
+      if (country && country.id !== state.homeCountryId) {
+        invadedCountryIds.add(country.id);
+      }
+    }
 
-    const enemyCountryIds = Array.from(
-      new Set(
-        updatedAIEnemy.bases
-          .map((b) => findCountryAtPosition(b.position.latitude, b.position.longitude)?.id)
-          .filter((id): id is string => !!id)
-      )
-    );
+    // Spawn defenders for newly invaded countries (not already in occupiedCountryIds)
+    for (const countryId of invadedCountryIds) {
+      // Check if we already spawned defenders for this country
+      const alreadyHasDefenders = updatedAIEnemy.bases.some(
+        (b) => b.id.startsWith(`defender-${countryId}-`)
+      );
+      
+      if (!alreadyHasDefenders && !state.occupiedCountryIds.includes(countryId)) {
+        // Find the country info and a unit position to spawn near
+        const invadingUnit = updatedUnits.find((u) => {
+          if (u.faction !== 'player') return false;
+          const c = findCountryAtPosition(u.position.latitude, u.position.longitude);
+          return c?.id === countryId;
+        });
 
-    const borderViolationByCountry =
-      enemyCountryIds.length > 0
-        ? updatedUnits.some((u) => {
-            if (u.faction !== 'player') return false;
-            const c = findCountryAtPosition(u.position.latitude, u.position.longitude);
-            return !!c?.id && enemyCountryIds.includes(c.id);
-          })
-        : false;
+        if (invadingUnit) {
+          const country = findCountryAtPosition(
+            invadingUnit.position.latitude,
+            invadingUnit.position.longitude
+          );
+          if (country) {
+            const { bases: newBases, units: newUnits } = generateCountryDefenses(
+              countryId,
+              country.name,
+              invadingUnit.position,
+              currentTick
+            );
 
-    const borderViolation = borderCheck.violated || borderViolationByCountry;
+            // Add new defenders
+            updatedAIEnemy = {
+              ...updatedAIEnemy,
+              bases: [...updatedAIEnemy.bases, ...newBases],
+              units: [...updatedAIEnemy.units, ...newUnits],
+              // Immediately reveal these bases since we're invading
+              revealedBases: [...updatedAIEnemy.revealedBases, ...newBases.map((b) => b.id)],
+            };
+
+            // Log the encounter
+            const power = getCountryPower(countryId);
+            const powerDesc = power >= 4 ? 'MAJOR' : power >= 2 ? 'MODERATE' : 'LIGHT';
+            get().addLog(
+              'combat',
+              `⚠️ ${country.name} DEFENDERS DETECTED! ${powerDesc} resistance - ${newBases.length} bases, ${newUnits.length} units!`,
+              invadingUnit.position
+            );
+
+            // Increase alert level
+            if (updatedAIEnemy.alertLevel === 'peace') {
+              updatedAIEnemy = { ...updatedAIEnemy, alertLevel: 'vigilant' };
+            } else if (updatedAIEnemy.alertLevel === 'vigilant') {
+              updatedAIEnemy = { ...updatedAIEnemy, alertLevel: 'hostile' };
+            }
+          }
+        }
+      }
+    }
 
     // Check for missile strikes on enemy bases
     const explosionPositions = newExplosions.map((e) => e.position);
     const struckBases = checkMissileStrikes(explosionPositions, updatedAIEnemy.bases);
 
-    // Calculate AI reactions
-    const reactions = calculateAIReaction(
-      updatedAIEnemy,
-      borderViolation,
-      struckBases,
-      currentTick
-    );
+    // Also spawn defenders for missile strike locations
+    for (const missile of arrivedMissiles) {
+      const country = findCountryAtPosition(
+        missile.targetPosition.latitude,
+        missile.targetPosition.longitude
+      );
+      if (country && country.id !== state.homeCountryId) {
+        const alreadyHasDefenders = updatedAIEnemy.bases.some(
+          (b) => b.id.startsWith(`defender-${country.id}-`)
+        );
 
-    // Process reactions
-    for (const reaction of reactions) {
-      get().addLog('intel', reaction.message);
+        if (!alreadyHasDefenders) {
+          const { bases: newBases, units: newUnits } = generateCountryDefenses(
+            country.id,
+            country.name,
+            missile.targetPosition,
+            currentTick
+          );
 
-      if (reaction.type === 'reveal_bases' && reaction.revealedBases) {
-        const newRevealed = new Set(updatedAIEnemy.revealedBases);
-        reaction.revealedBases.forEach(id => newRevealed.add(id));
-        updatedAIEnemy = {
-          ...updatedAIEnemy,
-          revealedBases: Array.from(newRevealed),
-        };
-      }
+          updatedAIEnemy = {
+            ...updatedAIEnemy,
+            bases: [...updatedAIEnemy.bases, ...newBases],
+            units: [...updatedAIEnemy.units, ...newUnits],
+            revealedBases: [...updatedAIEnemy.revealedBases, ...newBases.map((b) => b.id)],
+            alertLevel: 'war',
+          };
 
-      if (reaction.type === 'increase_alert') {
-        const alertProgression: Record<string, 'vigilant' | 'hostile' | 'war'> = {
-          'peace': 'vigilant',
-          'vigilant': 'hostile',
-          'hostile': 'war',
-          'war': 'war',
-        };
-        updatedAIEnemy = {
-          ...updatedAIEnemy,
-          alertLevel: alertProgression[updatedAIEnemy.alertLevel],
-          lastReactionTick: currentTick,
-        };
+          const power = getCountryPower(country.id);
+          const powerDesc = power >= 4 ? 'MAJOR' : power >= 2 ? 'MODERATE' : 'LIGHT';
+          get().addLog(
+            'intel',
+            `☢️ ${country.name} MOBILIZING! ${powerDesc} military response - ${newBases.length} bases, ${newUnits.length} units detected!`,
+            missile.targetPosition
+          );
+        }
       }
     }
 
@@ -593,16 +634,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (struckBases.length > 0) {
       updatedAIEnemy = {
         ...updatedAIEnemy,
-        bases: updatedAIEnemy.bases.map(base => {
-          if (struckBases.find(s => s.id === base.id)) {
-            const newHealth = Math.max(0, base.health - 200);
-            if (newHealth === 0) {
-              get().addLog('combat', `🔥 Enemy ${base.name} destroyed!`, base.position);
+        bases: updatedAIEnemy.bases
+          .map((base) => {
+            if (struckBases.find((s) => s.id === base.id)) {
+              const newHealth = Math.max(0, base.health - 200);
+              if (newHealth === 0) {
+                get().addLog('combat', `🔥 Enemy ${base.name} destroyed!`, base.position);
+              }
+              return { ...base, health: newHealth };
             }
-            return { ...base, health: newHealth };
-          }
-          return base;
-        }).filter(base => base.health > 0),
+            return base;
+          })
+          .filter((base) => base.health > 0),
       };
     }
 
