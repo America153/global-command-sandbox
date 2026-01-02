@@ -10,13 +10,15 @@ import {
 import { useEffect, useRef } from 'react';
 
 export default function IntelPanel() {
-  const { logs, hq, bases, units, resources, tick, aiEnemy, getVisibleEnemyBases, getVisibleEnemyUnits } = useGameStore();
+  const { logs, hq, bases, units, resources, tick, aiEnemy } = useGameStore();
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Check if player has intel capability
   const hasIntelBase = bases.some(b => b.type === 'intelligence');
-  const visibleEnemyBases = getVisibleEnemyBases();
-  const visibleEnemyUnits = getVisibleEnemyUnits();
+  
+  // Compute visible enemy entities reactively
+  const visibleEnemyBases = aiEnemy.bases.filter(base => aiEnemy.revealedBases.includes(base.id));
+  const visibleEnemyUnits = hasIntelBase ? aiEnemy.units : [];
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
