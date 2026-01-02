@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Cesium from 'cesium';
 import { useGameStore } from '@/store/gameStore';
 
@@ -10,16 +10,27 @@ interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
 }
 
+// Store viewer reference outside component to persist across re-renders
+let globalViewer: Cesium.Viewer | null = null;
+let entityDataSource: Cesium.CustomDataSource | null = null;
+
 export default function Globe({ onGlobeClick }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Cesium.Viewer | null>(null);
+  const viewerInitialized = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { hq, bases, units, territories } = useGameStore();
+  const { hq, bases, units, territories, selectBase } = useGameStore();
 
-  // Initialize Cesium viewer
+  // Stable callback reference
+  const handleGlobeClick = useCallback((lat: number, lng: number) => {
+    onGlobeClick(lat, lng);
+  }, [onGlobeClick]);
+
+  // Initialize Cesium viewer only once
   useEffect(() => {
-    if (!containerRef.current || viewerRef.current) return;
+    if (!containerRef.current || viewerInitialized.current) return;
+    
+    viewerInitialized.current = true;
 
     const viewer = new Cesium.Viewer(containerRef.current, {
       baseLayerPicker: false,
@@ -47,8 +58,6 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0d1117');
     viewer.scene.fog.enabled = true;
     viewer.scene.fog.density = 0.0002;
-    
-    // Enable lighting for realistic globe
     viewer.scene.globe.enableLighting = false;
     
     // Set initial camera position
@@ -56,9 +65,33 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       destination: Cesium.Cartesian3.fromDegrees(0, 20, 25000000),
     });
 
-    // Handle click events
+    // Create a custom data source for game entities
+    entityDataSource = new Cesium.CustomDataSource('gameEntities');
+    viewer.dataSources.add(entityDataSource);
+
+    globalViewer = viewer;
+    setIsLoaded(true);
+
+    // Click handler - check for entity clicks first
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
+      // Check if clicking on an entity first
+      const picked = viewer.scene.pick(movement.position);
+      if (Cesium.defined(picked) && picked.id && picked.id.properties) {
+        const entityId = picked.id.properties.gameId?.getValue();
+        const entityType = picked.id.properties.entityType?.getValue();
+        
+        if (entityType === 'base' && entityId) {
+          const state = useGameStore.getState();
+          const base = state.bases.find(b => b.id === entityId);
+          if (base) {
+            state.selectBase(base);
+            return;
+          }
+        }
+      }
+      
+      // Otherwise handle as globe click for placement
       const cartesian = viewer.camera.pickEllipsoid(
         movement.position,
         viewer.scene.globe.ellipsoid
@@ -68,31 +101,45 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
         const lat = Cesium.Math.toDegrees(cartographic.latitude);
         const lng = Cesium.Math.toDegrees(cartographic.longitude);
-        onGlobeClick(lat, lng);
+        handleGlobeClick(lat, lng);
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    viewerRef.current = viewer;
-    setIsLoaded(true);
-
     return () => {
       handler.destroy();
-      viewer.destroy();
-      viewerRef.current = null;
+      // Don't destroy viewer to prevent flickering
     };
-  }, [onGlobeClick]);
+  }, [handleGlobeClick, selectBase]);
 
-  // Update entities when game state changes
+  // Update entities when game state changes - without recreating viewer
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer || !isLoaded) return;
+    if (!entityDataSource || !isLoaded) return;
 
-    // Clear existing entities
-    viewer.entities.removeAll();
+    // Clear only game entities, not the whole viewer
+    entityDataSource.entities.removeAll();
+
+    const getFactionColor = (faction: string) => {
+      switch (faction) {
+        case 'player': return Cesium.Color.fromCssColorString('#22c55e');
+        case 'ai': return Cesium.Color.fromCssColorString('#ef4444');
+        default: return Cesium.Color.fromCssColorString('#6b7280');
+      }
+    };
+
+    const getBaseIcon = (type: string): string => {
+      switch (type) {
+        case 'hq': return '⊕';
+        case 'army': return '🛡';
+        case 'navy': return '⚓';
+        case 'airforce': return '✈';
+        case 'intelligence': return '👁';
+        default: return '●';
+      }
+    };
 
     // Add territory influence circles
     territories.forEach((territory) => {
-      viewer.entities.add({
+      entityDataSource!.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           territory.position.longitude,
           territory.position.latitude
@@ -100,40 +147,30 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         ellipse: {
           semiMajorAxis: territory.radius * 1000,
           semiMinorAxis: territory.radius * 1000,
-          material: Cesium.Color.fromCssColorString(
-            territory.faction === 'player' 
-              ? 'rgba(61, 90, 61, 0.3)' 
-              : 'rgba(201, 68, 68, 0.3)'
-          ),
+          material: getFactionColor(territory.faction).withAlpha(0.15),
           outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(
-            territory.faction === 'player' 
-              ? 'rgba(61, 90, 61, 0.8)' 
-              : 'rgba(201, 68, 68, 0.8)'
-          ),
+          outlineColor: getFactionColor(territory.faction).withAlpha(0.5),
           outlineWidth: 2,
           height: 0,
         },
       });
     });
 
-    // Add bases
+    // Add all bases (including HQ which is in bases array)
     bases.forEach((base) => {
-      const color = base.faction === 'player' 
-        ? Cesium.Color.fromCssColorString('#4a90d9')
-        : Cesium.Color.fromCssColorString('#c94444');
+      const color = getFactionColor(base.faction);
+      const icon = getBaseIcon(base.type);
       
-      const symbol = base.type === 'hq' ? '⬟' : 
-                     base.type === 'army' ? '◆' :
-                     base.type === 'navy' ? '◇' :
-                     base.type === 'airforce' ? '△' : '○';
-
-      viewer.entities.add({
+      entityDataSource!.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           base.position.longitude,
           base.position.latitude,
           1000
         ),
+        properties: {
+          gameId: base.id,
+          entityType: 'base',
+        },
         point: {
           pixelSize: base.type === 'hq' ? 20 : 14,
           color: color,
@@ -142,7 +179,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: base.name,
+          text: `${icon} ${base.name}`,
           font: '12px JetBrains Mono',
           fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.BLACK,
@@ -157,11 +194,9 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
     // Add units
     units.forEach((unit) => {
-      const color = unit.faction === 'player' 
-        ? Cesium.Color.fromCssColorString('#5cb85c')
-        : Cesium.Color.fromCssColorString('#d9534f');
+      const color = getFactionColor(unit.faction);
 
-      viewer.entities.add({
+      entityDataSource!.entities.add({
         position: Cesium.Cartesian3.fromDegrees(
           unit.position.longitude,
           unit.position.latitude,
@@ -174,11 +209,22 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
+        label: {
+          text: unit.templateType.substring(0, 3).toUpperCase(),
+          font: '10px JetBrains Mono',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          pixelOffset: new Cesium.Cartesian2(0, 10),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
       });
 
       // Draw movement line if unit is moving
       if (unit.destination) {
-        viewer.entities.add({
+        entityDataSource!.entities.add({
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray([
               unit.position.longitude,

@@ -6,12 +6,9 @@ import {
   Shield, 
   Eye, 
   Crosshair,
-  Users,
-  Truck,
-  Rocket,
-  Target
+  Users
 } from 'lucide-react';
-import type { BaseType, UnitType } from '@/types/game';
+import type { BaseType } from '@/types/game';
 
 export default function AssetPalette() {
   const { selectedTool, selectTool, hq } = useGameStore();
@@ -86,7 +83,7 @@ export default function AssetPalette() {
               Quick Deploy
             </h3>
             <p className="text-[10px] text-muted-foreground">
-              Select a base to produce units
+              Click a base on the map to train units
             </p>
           </div>
         )}
@@ -105,7 +102,7 @@ export default function AssetPalette() {
               <>
                 <li>• Select base type to build</li>
                 <li>• Click globe to place</li>
-                <li>• Select base to produce units</li>
+                <li>• Click base to train units</li>
               </>
             )}
           </ul>
@@ -119,7 +116,7 @@ export default function AssetPalette() {
             ? selectedTool.type === 'hq' 
               ? 'PLACE HQ'
               : selectedTool.type === 'base'
-                ? `PLACE ${selectedTool.baseType.toUpperCase()}`
+                ? `PLACE ${selectedTool.baseType?.toUpperCase()}`
                 : 'DEPLOY UNIT'
             : 'NONE'
           }
