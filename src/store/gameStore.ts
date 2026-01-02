@@ -15,6 +15,17 @@ import type {
 import { BASE_CONFIG, UNIT_TEMPLATES, MISSILE_TEMPLATES } from '@/types/game';
 import { findCountryAtPosition } from '@/data/countries';
 import { getNextPosition } from '@/engine/terrain';
+import { 
+  AIEnemyState, 
+  ENEMY_NATION, 
+  createInitialEnemyBases, 
+  createInitialEnemyUnits,
+  checkBorderViolation,
+  checkMissileStrikes,
+  calculateAIReaction,
+  hasIntelligenceCapability,
+  getVisibleEnemyEntities
+} from '@/engine/aiEnemy';
 
 interface DeploymentState {
   isActive: boolean;
@@ -43,6 +54,19 @@ interface Explosion {
   startTick: number;
   duration: number; // ticks
 }
+
+// Initialize enemy state
+const initialEnemyBases = createInitialEnemyBases();
+const initialEnemyUnits = createInitialEnemyUnits(initialEnemyBases);
+
+const initialAIEnemyState: AIEnemyState = {
+  nation: ENEMY_NATION,
+  bases: initialEnemyBases,
+  units: initialEnemyUnits,
+  alertLevel: 'peace',
+  revealedBases: [],
+  lastReactionTick: 0,
+};
 
 interface GameStore extends GameState {
   // Actions
@@ -75,6 +99,10 @@ interface GameStore extends GameState {
   fireMissile: (targetPosition: Coordinates) => void;
   missilesInFlight: MissileInFlight[];
   explosions: Explosion[];
+  // AI Enemy system
+  aiEnemy: AIEnemyState;
+  getVisibleEnemyBases: () => Base[];
+  getVisibleEnemyUnits: () => Unit[];
 }
 
 const initialState: GameState & { 
@@ -86,6 +114,7 @@ const initialState: GameState & {
   missileTargeting: MissileTargetingState;
   missilesInFlight: MissileInFlight[];
   explosions: Explosion[];
+  aiEnemy: AIEnemyState;
 } = {
   tick: 0,
   speed: 1,
@@ -115,10 +144,36 @@ const initialState: GameState & {
   },
   missilesInFlight: [],
   explosions: [],
+  aiEnemy: initialAIEnemyState,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialState,
+
+  // AI Enemy visibility helpers
+  getVisibleEnemyBases: () => {
+    const state = get();
+    const playerHasIntel = hasIntelligenceCapability(state.bases);
+    const { visibleBases } = getVisibleEnemyEntities(
+      state.aiEnemy.bases,
+      state.aiEnemy.units,
+      state.aiEnemy.revealedBases,
+      playerHasIntel
+    );
+    return visibleBases;
+  },
+
+  getVisibleEnemyUnits: () => {
+    const state = get();
+    const playerHasIntel = hasIntelligenceCapability(state.bases);
+    const { visibleUnits } = getVisibleEnemyEntities(
+      state.aiEnemy.bases,
+      state.aiEnemy.units,
+      state.aiEnemy.revealedBases,
+      playerHasIntel
+    );
+    return visibleUnits;
+  },
 
   setSpeed: (speed) => set({ speed }),
 
@@ -467,6 +522,69 @@ export const useGameStore = create<GameStore>((set, get) => ({
       exp => currentTick - exp.startTick < exp.duration
     );
 
+    // === AI ENEMY REACTIONS ===
+    let updatedAIEnemy = { ...state.aiEnemy };
+
+    // Check for border violations (player units near enemy bases)
+    const borderCheck = checkBorderViolation(updatedUnits, updatedAIEnemy.bases);
+    
+    // Check for missile strikes on enemy bases
+    const explosionPositions = newExplosions.map(e => e.position);
+    const struckBases = checkMissileStrikes(explosionPositions, updatedAIEnemy.bases);
+
+    // Calculate AI reactions
+    const reactions = calculateAIReaction(
+      updatedAIEnemy,
+      borderCheck.violated,
+      struckBases,
+      currentTick
+    );
+
+    // Process reactions
+    for (const reaction of reactions) {
+      get().addLog('intel', reaction.message);
+
+      if (reaction.type === 'reveal_bases' && reaction.revealedBases) {
+        const newRevealed = new Set(updatedAIEnemy.revealedBases);
+        reaction.revealedBases.forEach(id => newRevealed.add(id));
+        updatedAIEnemy = {
+          ...updatedAIEnemy,
+          revealedBases: Array.from(newRevealed),
+        };
+      }
+
+      if (reaction.type === 'increase_alert') {
+        const alertProgression: Record<string, 'vigilant' | 'hostile' | 'war'> = {
+          'peace': 'vigilant',
+          'vigilant': 'hostile',
+          'hostile': 'war',
+          'war': 'war',
+        };
+        updatedAIEnemy = {
+          ...updatedAIEnemy,
+          alertLevel: alertProgression[updatedAIEnemy.alertLevel],
+          lastReactionTick: currentTick,
+        };
+      }
+    }
+
+    // Damage enemy bases struck by missiles
+    if (struckBases.length > 0) {
+      updatedAIEnemy = {
+        ...updatedAIEnemy,
+        bases: updatedAIEnemy.bases.map(base => {
+          if (struckBases.find(s => s.id === base.id)) {
+            const newHealth = Math.max(0, base.health - 200);
+            if (newHealth === 0) {
+              get().addLog('combat', `🔥 Enemy ${base.name} destroyed!`, base.position);
+            }
+            return { ...base, health: newHealth };
+          }
+          return base;
+        }).filter(base => base.health > 0),
+      };
+    }
+
     set({
       tick: currentTick,
       resources: state.resources + incomePerTick,
@@ -474,6 +592,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       occupiedCountryIds: Array.from(newOccupiedCountries),
       missilesInFlight: remainingMissiles,
       explosions: activeExplosions,
+      aiEnemy: updatedAIEnemy,
     });
   },
 
