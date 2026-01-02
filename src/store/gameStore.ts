@@ -464,7 +464,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.speed === 0) return;
 
     // Generate passive income from HQ
-    const incomePerTick = state.hq ? 10 * state.speed : 0;
+    let incomePerTick = state.hq ? 10 * state.speed : 0;
+    
+    // Add income from captured territories based on country power
+    for (const countryId of state.capturedCountryIds) {
+      const countryPower = getCountryPower(countryId);
+      // More powerful countries generate more resources: power 1=5, power 5=50 per tick
+      incomePerTick += (5 + countryPower * 10) * state.speed;
+    }
 
     // Move units toward destinations and track country occupation
     const newOccupiedCountries = new Set(state.occupiedCountryIds);
@@ -715,11 +722,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         'war',
         updatedAIEnemy.alertLevel,
         currentTick - state.lastRetaliationTick,
-        currentTick
+        currentTick,
+        state.homeCountryId
       );
 
       // Apply retaliation movements
-      if (retaliation.movedUnits.length > 0 || retaliation.reinforcements.length > 0) {
+      if (retaliation.movedUnits.length > 0 || retaliation.reinforcements.length > 0 || retaliation.raidForce.length > 0) {
         retaliationTick = currentTick;
         retaliation.logs.forEach(log => get().addLog('intel', log));
       }
@@ -732,6 +740,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             return moved || u;
           }),
           ...retaliation.reinforcements,
+          ...retaliation.raidForce, // Add raid force units
         ],
         bases: combatResult.updatedEnemyBases,
       };
