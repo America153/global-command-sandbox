@@ -193,8 +193,9 @@ export function generateCountryDefenses(
     return { bases: [], units: [] };
   }
 
-  // Number of bases scales with power (2-5 bases)
-  const numBases = Math.min(5, 1 + power);
+  // Number of bases scales with power (2-5 bases) + 1 HQ
+  const numRegularBases = Math.min(5, 1 + power);
+  const totalBases = numRegularBases + 1; // +1 for HQ
 
   // All base types available for dynamic mix
   const allBaseTypes: BaseType[] = ['army', 'navy', 'airforce', 'intelligence'];
@@ -203,13 +204,40 @@ export function generateCountryDefenses(
   const shuffledTypes = [...allBaseTypes].sort(() => Math.random() - 0.5);
 
   // Get geologically accurate positions spread across the country
-  const basePositions = getSpreadPointsInCountry(country, numBases);
+  const basePositions = getSpreadPointsInCountry(country, totalBases);
 
-  // Generate bases at spread positions within country borders
-  for (let i = 0; i < numBases; i++) {
+  // First position is for enemy HQ (capital)
+  const hqPosition = basePositions[0];
+  const enemyHQ: Base = {
+    id: `defender-${countryId}-hq`,
+    name: `${countryName} Command HQ`,
+    type: 'hq',
+    position: hqPosition,
+    faction: 'ai',
+    health: 800,
+    maxHealth: 800,
+    productionCapacity: 2,
+    influenceRadius: BASE_CONFIG['hq'].influenceRadius,
+    createdAt: currentTick,
+  };
+  bases.push(enemyHQ);
+
+  // Generate HQ garrison units
+  const hqUnits = generateUnitsForBase(
+    enemyHQ,
+    power,
+    countryName,
+    units.length,
+    currentTick,
+    country
+  );
+  units.push(...hqUnits);
+
+  // Generate regular bases at remaining positions
+  for (let i = 0; i < numRegularBases; i++) {
     // Pick a random base type from shuffled list (cycle through)
     const baseType = shuffledTypes[i % shuffledTypes.length];
-    const basePosition = basePositions[i];
+    const basePosition = basePositions[i + 1]; // +1 to skip HQ position
 
     const base: Base = {
       id: `defender-${countryId}-base-${i}`,
@@ -239,6 +267,29 @@ export function generateCountryDefenses(
   }
 
   return { bases, units };
+}
+
+// Get the enemy HQ ID for a country
+export function getCountryHQId(countryId: string): string {
+  return `defender-${countryId}-hq`;
+}
+
+// Check if all enemy bases (including HQ) in a country are destroyed
+export function isCountryConquered(countryId: string, enemyBases: Base[]): boolean {
+  const countryBases = enemyBases.filter(b => b.id.startsWith(`defender-${countryId}-`));
+  return countryBases.length === 0;
+}
+
+// Get all countries that have been invaded (have defenders spawned)
+export function getInvadedCountryIds(enemyBases: Base[]): string[] {
+  const countryIds = new Set<string>();
+  for (const base of enemyBases) {
+    const match = base.id.match(/^defender-([^-]+)-/);
+    if (match) {
+      countryIds.add(match[1]);
+    }
+  }
+  return Array.from(countryIds);
 }
 
 // Generate appropriate units for a base - units spawn within country borders

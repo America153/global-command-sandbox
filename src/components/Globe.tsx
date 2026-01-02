@@ -14,7 +14,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight, explosions, aiEnemy } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds, capturedCountryIds, struckCountryIds, missilesInFlight, explosions, aiEnemy } = useGameStore();
   
   // Check if player has intel capability for enemy unit visibility
   const hasIntelBase = useMemo(() => bases.some(b => b.type === 'intelligence' && b.faction === 'player'), [bases]);
@@ -98,21 +98,28 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     // NOTE: use legacy hsla() syntax because react-globe.gl's color parser
     // doesn't fully support the newer "hsl(... / a)" CSS format.
     
-    // Struck countries are bright red
+    // Captured countries are bright blue (player controlled)
+    if (countryId && capturedCountryIds.includes(countryId)) {
+      return 'hsla(217, 91%, 50%, 0.7)'; // Bright blue for captured/player territory
+    }
+    
+    // Home country is blue
+    if (countryId && homeCountryId && countryId === String(homeCountryId)) {
+      return 'hsla(217, 91%, 60%, 0.55)'; // Blue for HQ country
+    }
+    
+    // Struck countries are bright red (under attack)
     if (countryId && struckCountryIds.includes(countryId)) {
       return 'hsla(0, 100%, 50%, 0.7)'; // Bright red for missile struck
     }
 
-    if (countryId && homeCountryId && countryId === String(homeCountryId)) {
-      return 'hsla(217, 91%, 60%, 0.55)'; // Blue for HQ country
-    }
-
+    // Occupied countries (has enemy defenders) are red
     if (countryId && occupiedCountryIds.includes(countryId)) {
-      return 'hsla(0, 84%, 60%, 0.55)'; // Red for crossed/occupied
+      return 'hsla(0, 84%, 60%, 0.55)'; // Red for crossed/occupied with enemies
     }
 
     return 'hsla(215, 28%, 17%, 0.85)'; // Default dark
-  }, [homeCountryId, occupiedCountryIds, struckCountryIds]);
+  }, [homeCountryId, occupiedCountryIds, capturedCountryIds, struckCountryIds]);
 
   // Get base icon based on type
   const getBaseIcon = (type: string) => {
