@@ -147,7 +147,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       lng: unit.position.longitude,
       text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
       color: unit.faction === 'player' ? '#ffffff' : '#ff6666',
-      size: 1.2,
+      size: 0.5,
     }));
   }, [units, visibleEnemyUnits]);
 
