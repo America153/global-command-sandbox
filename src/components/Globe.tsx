@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GlobeGL from 'react-globe.gl';
 import { useGameStore } from '@/store/gameStore';
+import { findCountryAtPosition } from '@/data/countries';
 
 interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
@@ -13,7 +14,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds } = useGameStore();
 
   // Handle resize
   useEffect(() => {
@@ -28,8 +29,6 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
     updateDimensions();
     window.addEventListener('resize', updateDimensions);
-    
-    // Small delay to ensure container is mounted
     const timer = setTimeout(updateDimensions, 100);
     
     return () => {
@@ -52,42 +51,48 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       .catch(console.error);
   }, []);
 
-  // Auto-rotate
+  // Setup globe (no auto-rotate)
   useEffect(() => {
     if (!globeRef.current || !isLoaded) return;
     
     const globe = globeRef.current;
     if (globe.controls) {
-      globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.3;
+      globe.controls().autoRotate = false;
     }
     globe.pointOfView({ altitude: 2.5 });
   }, [isLoaded, dimensions]);
 
+  // Click handler for globe
   const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null, event?: MouseEvent) => {
-    console.log('Globe clicked:', coords);
     if (coords && coords.lat !== undefined && coords.lng !== undefined) {
       onGlobeClick(coords.lat, coords.lng);
     }
   }, [onGlobeClick]);
 
+  // Click handler for polygons (countries)
   const handlePolygonClick = useCallback((polygon: any, event: MouseEvent, coords: { lat: number; lng: number }) => {
-    console.log('Polygon clicked:', coords);
     if (coords && coords.lat !== undefined && coords.lng !== undefined) {
       onGlobeClick(coords.lat, coords.lng);
     }
   }, [onGlobeClick]);
 
-  const getFactionColor = (faction: string) => {
-    switch (faction) {
-      case 'player': return 'rgba(34, 197, 94, 0.3)';
-      case 'ai': return 'rgba(239, 68, 68, 0.3)';
-      default: return 'rgba(107, 114, 128, 0.1)';
+  // Get country color based on control
+  const getPolygonColor = useCallback((feature: any) => {
+    const countryId = feature.id || feature.properties?.id;
+    
+    if (countryId && homeCountryId && countryId === homeCountryId) {
+      return 'rgba(59, 130, 246, 0.6)'; // Blue for home country
     }
-  };
+    
+    if (countryId && occupiedCountryIds.includes(countryId)) {
+      return 'rgba(239, 68, 68, 0.6)'; // Red for occupied
+    }
+    
+    return 'rgba(30, 40, 55, 0.8)'; // Default dark
+  }, [homeCountryId, occupiedCountryIds]);
 
   // Prepare points data for bases and units
-  const basePoints = bases.map(base => ({
+  const basePoints = useMemo(() => bases.map(base => ({
     lat: base.position.latitude,
     lng: base.position.longitude,
     name: base.name,
@@ -96,27 +101,17 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     size: base.type === 'hq' ? 0.8 : 0.5,
     color: base.faction === 'player' ? '#22c55e' : base.faction === 'ai' ? '#ef4444' : '#6b7280',
     base,
-  }));
+  })), [bases]);
 
-  const unitPoints = units.map(unit => ({
+  const unitPoints = useMemo(() => units.map(unit => ({
     lat: unit.position.latitude,
     lng: unit.position.longitude,
     name: unit.templateType.substring(0, 3).toUpperCase(),
     size: 0.3,
     color: unit.faction === 'player' ? '#22c55e' : '#ef4444',
-  }));
+  })), [units]);
 
-  const allPoints = [...basePoints, ...unitPoints];
-
-  // Territory rings
-  const territoryRings = territories.map(t => ({
-    lat: t.position.latitude,
-    lng: t.position.longitude,
-    maxR: t.radius / 111, // Convert km to degrees approx
-    propagationSpeed: 0,
-    repeatPeriod: 0,
-    color: getFactionColor(t.faction),
-  }));
+  const allPoints = useMemo(() => [...basePoints, ...unitPoints], [basePoints, unitPoints]);
 
   if (!isLoaded || dimensions.width === 0) {
     return (
@@ -138,7 +133,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-dark.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
         polygonsData={countriesData.features}
-        polygonCapColor={() => 'rgba(20, 30, 45, 0.8)'}
+        polygonCapColor={getPolygonColor}
         polygonSideColor={() => 'rgba(40, 60, 90, 0.4)'}
         polygonStrokeColor={() => '#ffffff'}
         polygonAltitude={0.006}
@@ -156,12 +151,6 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
             useGameStore.getState().selectBase(point.base);
           }
         }}
-        ringsData={territoryRings}
-        ringLat="lat"
-        ringLng="lng"
-        ringMaxRadius="maxR"
-        ringColor="color"
-        ringAltitude={0.003}
         atmosphereColor="#1e40af"
         atmosphereAltitude={0.15}
       />
