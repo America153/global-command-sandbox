@@ -4,7 +4,8 @@ import {
   Info, 
   Crosshair, 
   Factory,
-  Radio
+  Radio,
+  Navigation
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
@@ -22,6 +23,7 @@ export default function IntelPanel() {
       case 'combat': return <Crosshair className="w-3 h-3 text-destructive" />;
       case 'intel': return <Radio className="w-3 h-3 text-primary" />;
       case 'production': return <Factory className="w-3 h-3 text-friendly" />;
+      case 'movement': return <Navigation className="w-3 h-3 text-primary" />;
       default: return <Info className="w-3 h-3 text-muted-foreground" />;
     }
   };
@@ -78,7 +80,7 @@ export default function IntelPanel() {
                 ${log.type === 'warning' ? 'bg-accent/10 border border-accent/30' : ''}
                 ${log.type === 'combat' ? 'bg-destructive/10 border border-destructive/30' : ''}
                 ${log.type === 'production' ? 'bg-friendly/10 border border-friendly/30' : ''}
-                ${log.type === 'info' || log.type === 'intel' ? 'bg-muted/20' : ''}
+                ${log.type === 'info' || log.type === 'intel' || log.type === 'movement' ? 'bg-muted/20' : ''}
                 animate-fade-in-up
               `}
             >

@@ -13,6 +13,11 @@ import type {
 } from '@/types/game';
 import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
 
+interface DeploymentState {
+  isActive: boolean;
+  selectedUnitIds: string[];
+}
+
 interface GameStore extends GameState {
   // Actions
   setSpeed: (speed: number) => void;
@@ -23,14 +28,19 @@ interface GameStore extends GameState {
   placeBase: (type: BaseType, position: Coordinates) => void;
   produceUnit: (baseId: string, unitType: UnitType) => void;
   moveUnit: (unitId: string, destination: Coordinates) => void;
+  deployUnits: (unitIds: string[], destination: Coordinates) => void;
   addLog: (type: GameLog['type'], message: string, position?: Coordinates) => void;
   runTick: () => void;
   resetGame: () => void;
   addResources: (amount: number) => void;
   selectedBase: Base | null;
+  // Deployment mode
+  deployment: DeploymentState;
+  startDeployment: (unitIds: string[]) => void;
+  cancelDeployment: () => void;
 }
 
-const initialState: GameState & { selectedBase: Base | null } = {
+const initialState: GameState & { selectedBase: Base | null; deployment: DeploymentState } = {
   tick: 0,
   speed: 1,
   playerFaction: 'player',
@@ -44,6 +54,10 @@ const initialState: GameState & { selectedBase: Base | null } = {
   selectedTool: null,
   selectedEntity: null,
   selectedBase: null,
+  deployment: {
+    isActive: false,
+    selectedUnitIds: [],
+  },
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -149,16 +163,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const base = state.bases.find(b => b.id === baseId);
     if (!base) return;
 
-    // Simplified unit production
-    const templates: Record<string, { name: string; cost: number }> = {
-      infantry: { name: 'Infantry Battalion', cost: 100 },
-      armor: { name: 'Armored Division', cost: 300 },
-      fighter: { name: 'Fighter Squadron', cost: 400 },
-      destroyer: { name: 'Destroyer', cost: 400 },
-    };
+    // Get template from UNIT_TEMPLATES
+    const template = UNIT_TEMPLATES[unitType];
+    if (!template) {
+      get().addLog('warning', `Unknown unit type: ${unitType}`);
+      return;
+    }
 
-    const template = templates[unitType];
-    if (!template) return;
+    if (state.resources < template.cost) {
+      get().addLog('warning', `Insufficient resources for ${template.name}.`);
+      return;
+    }
 
     if (state.resources < template.cost) {
       get().addLog('warning', `Insufficient resources for ${template.name}.`);
@@ -190,10 +205,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((state) => ({
       units: state.units.map(u => 
         u.id === unitId 
-          ? { ...u, destination, status: 'moving' as const }
+          ? { ...u, destination, status: 'moving' as const, parentBaseId: undefined }
           : u
       ),
     }));
+  },
+
+  deployUnits: (unitIds, destination) => {
+    const state = get();
+    const unitsToMove = state.units.filter(u => unitIds.includes(u.id));
+    
+    if (unitsToMove.length === 0) return;
+
+    set({
+      units: state.units.map(u => 
+        unitIds.includes(u.id)
+          ? { ...u, destination, status: 'moving' as const, parentBaseId: undefined }
+          : u
+      ),
+      deployment: { isActive: false, selectedUnitIds: [] },
+      selectedBase: null,
+    });
+
+    get().addLog('movement', `Deploying ${unitsToMove.length} units to ${destination.latitude.toFixed(4)}°, ${destination.longitude.toFixed(4)}°`, destination);
+  },
+
+  startDeployment: (unitIds) => {
+    set({
+      deployment: { isActive: true, selectedUnitIds: unitIds },
+      selectedBase: null,
+      selectedTool: null,
+    });
+    get().addLog('info', `Select destination on globe to deploy ${unitIds.length} units`);
+  },
+
+  cancelDeployment: () => {
+    set({
+      deployment: { isActive: false, selectedUnitIds: [] },
+    });
+    get().addLog('info', 'Deployment cancelled');
   },
 
   addLog: (type, message, position) => {

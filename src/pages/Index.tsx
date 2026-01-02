@@ -6,24 +6,31 @@ import TimeControls from '@/components/TimeControls';
 import TopBar from '@/components/TopBar';
 import Globe from '@/components/Globe';
 import BaseDetailsPanel from '@/components/BaseDetailsPanel';
+import DeploymentPanel from '@/components/DeploymentPanel';
 
 export default function Index() {
-  const { selectedTool, placeHQ, placeBase, addLog } = useGameStore();
+  const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits } = useGameStore();
 
   const handleGlobeClick = useCallback((lat: number, lng: number) => {
+    const position = { latitude: lat, longitude: lng };
+
+    // Handle deployment mode first
+    if (deployment.isActive) {
+      deployUnits(deployment.selectedUnitIds, position);
+      return;
+    }
+
     if (!selectedTool) {
       addLog('info', `Coordinates: ${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
       return;
     }
-
-    const position = { latitude: lat, longitude: lng };
 
     if (selectedTool.type === 'hq') {
       placeHQ(position);
     } else if (selectedTool.type === 'base') {
       placeBase(selectedTool.baseType!, position);
     }
-  }, [selectedTool, placeHQ, placeBase, addLog]);
+  }, [selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits]);
 
   const getSelectedToolLabel = () => {
     if (!selectedTool) return null;
@@ -49,10 +56,13 @@ export default function Index() {
           {/* Base Details Panel */}
           <BaseDetailsPanel />
           
+          {/* Deployment Panel */}
+          <DeploymentPanel />
+          
           {/* Coordinate Overlay */}
           <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
             <span className="text-xs font-mono text-muted-foreground">
-              Click globe to interact
+              {deployment.isActive ? 'Click to set deployment destination' : 'Click globe to interact'}
             </span>
           </div>
         </div>

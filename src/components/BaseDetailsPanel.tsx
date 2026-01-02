@@ -15,7 +15,7 @@ const ALLOWED_UNITS: Record<BaseType, UnitType[]> = {
 };
 
 export default function BaseDetailsPanel() {
-  const { selectedBase, selectBase, produceUnit, resources, units, addLog } = useGameStore();
+  const { selectedBase, selectBase, produceUnit, resources, units, addLog, startDeployment } = useGameStore();
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
 
   if (!selectedBase) return null;
@@ -52,6 +52,16 @@ export default function BaseDetailsPanel() {
     const taskForceName = `Task Force ${Math.floor(Math.random() * 900) + 100}`;
     addLog('combat', `${taskForceName} created with ${selectedUnits.size} units at ${selectedBase.name}`);
     toast.success(`${taskForceName} created with ${selectedUnits.size} units`);
+    setSelectedUnits(new Set());
+  };
+
+  const handleDeployment = () => {
+    if (selectedUnits.size === 0) {
+      toast.error('Select at least one unit to deploy');
+      return;
+    }
+    startDeployment(Array.from(selectedUnits));
+    toast.info('Click on the globe to set deployment destination');
     setSelectedUnits(new Set());
   };
 
@@ -168,20 +178,33 @@ export default function BaseDetailsPanel() {
           </div>
         </div>
 
-        {/* Create Task Force */}
+        {/* Action Buttons */}
         {stationedUnits.length > 0 && (
-          <div className="pt-2 border-t border-border">
-            <button
-              className={`w-full py-2 px-4 rounded font-mono text-sm transition-colors ${
-                selectedUnits.size > 0
-                  ? 'bg-primary/20 border border-primary text-primary hover:bg-primary/30'
-                  : 'bg-muted/20 border border-muted text-muted-foreground cursor-not-allowed'
-              }`}
-              onClick={createTaskForce}
-              disabled={selectedUnits.size === 0}
-            >
-              CREATE TASK FORCE {selectedUnits.size > 0 && `(${selectedUnits.size} units)`}
-            </button>
+          <div className="pt-2 border-t border-border space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className={`py-2 px-4 rounded font-mono text-sm transition-colors ${
+                  selectedUnits.size > 0
+                    ? 'bg-primary/20 border border-primary text-primary hover:bg-primary/30'
+                    : 'bg-muted/20 border border-muted text-muted-foreground cursor-not-allowed'
+                }`}
+                onClick={createTaskForce}
+                disabled={selectedUnits.size === 0}
+              >
+                TASK FORCE {selectedUnits.size > 0 && `(${selectedUnits.size})`}
+              </button>
+              <button
+                className={`py-2 px-4 rounded font-mono text-sm transition-colors ${
+                  selectedUnits.size > 0
+                    ? 'bg-destructive/20 border border-destructive text-destructive hover:bg-destructive/30'
+                    : 'bg-muted/20 border border-muted text-muted-foreground cursor-not-allowed'
+                }`}
+                onClick={handleDeployment}
+                disabled={selectedUnits.size === 0}
+              >
+                DEPLOY {selectedUnits.size > 0 && `(${selectedUnits.size})`}
+              </button>
+            </div>
           </div>
         )}
       </div>
