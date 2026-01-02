@@ -134,7 +134,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       lng: base.position.longitude,
       text: `${getBaseIcon(base.type)} ${base.name}`,
       color: base.faction === 'player' ? '#22c55e' : '#ef4444',
-      size: base.type === 'hq' ? 1.2 : 0.8,
+      size: base.type === 'hq' ? 0.6 : 0.4,
       base,
     }));
   }, [bases, visibleEnemyBases]);
