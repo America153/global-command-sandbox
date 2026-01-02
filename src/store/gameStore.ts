@@ -12,6 +12,7 @@ import type {
   TerritoryInfluence
 } from '@/types/game';
 import { BASE_CONFIG, UNIT_TEMPLATES } from '@/types/game';
+import { findCountryAtPosition } from '@/data/countries';
 
 interface DeploymentState {
   isActive: boolean;
@@ -38,9 +39,12 @@ interface GameStore extends GameState {
   deployment: DeploymentState;
   startDeployment: (unitIds: string[]) => void;
   cancelDeployment: () => void;
+  // Country control
+  homeCountryId: string | null;
+  occupiedCountryIds: string[];
 }
 
-const initialState: GameState & { selectedBase: Base | null; deployment: DeploymentState } = {
+const initialState: GameState & { selectedBase: Base | null; deployment: DeploymentState; homeCountryId: string | null; occupiedCountryIds: string[] } = {
   tick: 0,
   speed: 1,
   playerFaction: 'player',
@@ -58,6 +62,8 @@ const initialState: GameState & { selectedBase: Base | null; deployment: Deploym
     isActive: false,
     selectedUnitIds: [],
   },
+  homeCountryId: null,
+  occupiedCountryIds: [],
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -98,14 +104,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       radius: 100,
     };
 
+    // Find which country HQ is in
+    const homeCountry = findCountryAtPosition(position.latitude, position.longitude);
+
     set({ 
       hq, 
       bases: [...state.bases, hq],
       territories: [...state.territories, territory],
       selectedTool: null,
+      homeCountryId: homeCountry?.id || null,
     });
 
-    get().addLog('info', `HQ established at ${position.latitude.toFixed(4)}°, ${position.longitude.toFixed(4)}°`, position);
+    const countryName = homeCountry ? ` in ${homeCountry.name}` : '';
+    get().addLog('info', `HQ established${countryName} at ${position.latitude.toFixed(4)}°, ${position.longitude.toFixed(4)}°`, position);
   },
 
   placeBase: (type, position) => {
@@ -266,7 +277,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Generate passive income from HQ
     const incomePerTick = state.hq ? 10 * state.speed : 0;
 
-    // Move units toward destinations
+    // Move units toward destinations and track country occupation
+    const newOccupiedCountries = new Set(state.occupiedCountryIds);
+    
     const updatedUnits = state.units.map(unit => {
       if (unit.status === 'moving' && unit.destination) {
         const dx = unit.destination.longitude - unit.position.longitude;
@@ -274,18 +287,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance < 0.01) {
+          // Unit arrived - check if it entered a new country
+          const country = findCountryAtPosition(unit.position.latitude, unit.position.longitude);
+          if (country && country.id !== state.homeCountryId && !state.occupiedCountryIds.includes(country.id)) {
+            newOccupiedCountries.add(country.id);
+            get().addLog('combat', `Forces entered ${country.name}!`, unit.position);
+          }
           return { ...unit, status: 'idle' as const, destination: undefined };
         }
 
         const speed = 0.01 * state.speed; // Simplified movement
         const ratio = Math.min(speed / distance, 1);
         
+        const newPosition = {
+          latitude: unit.position.latitude + dy * ratio,
+          longitude: unit.position.longitude + dx * ratio,
+        };
+        
+        // Check if unit crossed into new country during movement
+        const country = findCountryAtPosition(newPosition.latitude, newPosition.longitude);
+        if (country && country.id !== state.homeCountryId && !state.occupiedCountryIds.includes(country.id)) {
+          newOccupiedCountries.add(country.id);
+          get().addLog('combat', `Forces entered ${country.name}!`, newPosition);
+        }
+        
         return {
           ...unit,
-          position: {
-            latitude: unit.position.latitude + dy * ratio,
-            longitude: unit.position.longitude + dx * ratio,
-          },
+          position: newPosition,
         };
       }
       return unit;
@@ -295,6 +323,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tick: state.tick + 1,
       resources: state.resources + incomePerTick,
       units: updatedUnits,
+      occupiedCountryIds: Array.from(newOccupiedCountries),
     });
   },
 
