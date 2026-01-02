@@ -9,7 +9,24 @@ export interface Coordinates {
   altitude?: number;
 }
 
-export type BaseType = 'hq' | 'army' | 'navy' | 'airforce' | 'intelligence';
+export type BaseType = 'hq' | 'army' | 'navy' | 'airforce' | 'intelligence' | 'missile';
+
+export type MissileType = 'tactical' | 'cruise' | 'icbm';
+
+export interface MissileTemplate {
+  type: MissileType;
+  name: string;
+  range: number; // km
+  damage: number;
+  cost: number;
+  flightTime: number; // seconds for arc animation
+}
+
+export const MISSILE_TEMPLATES: Record<MissileType, MissileTemplate> = {
+  tactical: { type: 'tactical', name: 'Tactical Missile', range: 500, damage: 50, cost: 100, flightTime: 3 },
+  cruise: { type: 'cruise', name: 'Cruise Missile', range: 2500, damage: 80, cost: 300, flightTime: 5 },
+  icbm: { type: 'icbm', name: 'ICBM', range: 12000, damage: 100, cost: 1000, flightTime: 8 },
+};
 
 export interface Base {
   id: string;
@@ -368,4 +385,5 @@ export const BASE_CONFIG: Record<BaseType, { name: string; cost: number; influen
   navy: { name: 'Naval Base', cost: 600, influenceRadius: 100, symbol: 'NAVY' },
   airforce: { name: 'Air Force Base', cost: 700, influenceRadius: 150, symbol: 'AF' },
   intelligence: { name: 'Intelligence Center', cost: 400, influenceRadius: 200, symbol: 'INTEL' },
+  missile: { name: 'Missile Silo', cost: 800, influenceRadius: 50, symbol: 'MSL' },
 };

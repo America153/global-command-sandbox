@@ -13,7 +13,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const [countriesData, setCountriesData] = useState<any>({ features: [] });
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { bases, units, territories, homeCountryId, occupiedCountryIds } = useGameStore();
+  const { bases, units, territories, homeCountryId, occupiedCountryIds, struckCountryIds, missilesInFlight } = useGameStore();
 
   // Handle resize
   useEffect(() => {
@@ -82,6 +82,12 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
 
     // NOTE: use legacy hsla() syntax because react-globe.gl's color parser
     // doesn't fully support the newer "hsl(... / a)" CSS format.
+    
+    // Struck countries are bright red
+    if (countryId && struckCountryIds.includes(countryId)) {
+      return 'hsla(0, 100%, 50%, 0.7)'; // Bright red for missile struck
+    }
+
     if (countryId && homeCountryId && countryId === String(homeCountryId)) {
       return 'hsla(217, 91%, 60%, 0.55)'; // Blue for HQ country
     }
@@ -91,7 +97,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     }
 
     return 'hsla(215, 28%, 17%, 0.85)'; // Default dark
-  }, [homeCountryId, occupiedCountryIds]);
+  }, [homeCountryId, occupiedCountryIds, struckCountryIds]);
 
   // Get base icon based on type
   const getBaseIcon = (type: string) => {
@@ -101,6 +107,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       case 'navy': return '⚓';
       case 'airforce': return '✈';
       case 'intelligence': return '👁';
+      case 'missile': return '🚀';
       default: return '●';
     }
   };
@@ -115,13 +122,13 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
     base,
   })), [bases]);
 
-  // Flat labels for units
+  // Flat labels for units - 2x size and white color
   const unitLabels = useMemo(() => units.map(unit => ({
     lat: unit.position.latitude,
     lng: unit.position.longitude,
     text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
-    color: unit.faction === 'player' ? '#22c55e' : '#ef4444',
-    size: 0.6,
+    color: '#ffffff',
+    size: 1.2,
   })), [units]);
 
   const allLabels = useMemo(() => [...baseLabels, ...unitLabels], [baseLabels, unitLabels]);
@@ -137,6 +144,18 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       color: unit.faction === 'player' ? ['#22c55e', '#86efac'] : ['#ef4444', '#fca5a5'],
       name: unit.name,
     })), [units]);
+
+  // Missile arcs
+  const missileArcs = useMemo(() => missilesInFlight.map(missile => ({
+    startLat: missile.startPosition.latitude,
+    startLng: missile.startPosition.longitude,
+    endLat: missile.targetPosition.latitude,
+    endLng: missile.targetPosition.longitude,
+    color: ['#ff0000', '#ff6600'],
+    name: `🚀 Missile Strike`,
+  })), [missilesInFlight]);
+
+  const allArcs = useMemo(() => [...movementArcs, ...missileArcs], [movementArcs, missileArcs]);
 
   if (!isLoaded || dimensions.width === 0) {
     return (
@@ -179,7 +198,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
           }
         }}
         onGlobeClick={handleGlobeClick}
-        arcsData={movementArcs}
+        arcsData={allArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"

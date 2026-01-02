@@ -15,12 +15,18 @@ export default function Index() {
     void loadCountries();
   }, []);
 
-  const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits } = useGameStore();
+  const { selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile } = useGameStore();
 
   const handleGlobeClick = useCallback((lat: number, lng: number) => {
     const position = { latitude: lat, longitude: lng };
 
-    // Handle deployment mode first
+    // Handle missile targeting mode first
+    if (missileTargeting.isActive) {
+      fireMissile(position);
+      return;
+    }
+
+    // Handle deployment mode
     if (deployment.isActive) {
       deployUnits(deployment.selectedUnitIds, position);
       return;
@@ -36,7 +42,7 @@ export default function Index() {
     } else if (selectedTool.type === 'base') {
       placeBase(selectedTool.baseType!, position);
     }
-  }, [selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits]);
+  }, [selectedTool, placeHQ, placeBase, addLog, deployment, deployUnits, missileTargeting, fireMissile]);
 
   const getSelectedToolLabel = () => {
     if (!selectedTool) return null;
@@ -68,7 +74,11 @@ export default function Index() {
           {/* Coordinate Overlay */}
           <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
             <span className="text-xs font-mono text-muted-foreground">
-              {deployment.isActive ? 'Click to set deployment destination' : 'Click globe to interact'}
+              {missileTargeting.isActive 
+                ? '🎯 Click to select missile target' 
+                : deployment.isActive 
+                  ? 'Click to set deployment destination' 
+                  : 'Click globe to interact'}
             </span>
           </div>
         </div>
