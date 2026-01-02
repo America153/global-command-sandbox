@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { useGameStore } from '@/store/gameStore';
-import { COUNTRIES, loadCountries } from '@/data/countries';
-
-// Configure Cesium
-(window as any).CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/';
-Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6MjU5LCJpYXQiOjE2MDc1Nzg4NDF9.free_token';
 
 interface GlobeProps {
   onGlobeClick: (lat: number, lng: number) => void;
@@ -13,129 +9,124 @@ interface GlobeProps {
 
 export default function Globe({ onGlobeClick }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Cesium.Viewer | null>(null);
-  const handlerRef = useRef<Cesium.ScreenSpaceEventHandler | null>(null);
-  const entityDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
-  const countryDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
   const onGlobeClickRef = useRef(onGlobeClick);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [countriesLoaded, setCountriesLoaded] = useState(false);
+  const [accessToken, setAccessToken] = useState<string>(() => {
+    return localStorage.getItem('mapbox_token') || '';
+  });
   
-  const { hq, bases, units, territories, selectBase, homeCountryId, occupiedCountryIds } = useGameStore();
+  const { bases, units, territories } = useGameStore();
 
   // Keep callback ref updated
   useEffect(() => {
     onGlobeClickRef.current = onGlobeClick;
   }, [onGlobeClick]);
 
-  // Initialize Cesium viewer only once
+  // Initialize Mapbox viewer
   useEffect(() => {
-    if (!containerRef.current || viewerRef.current) return;
+    if (!containerRef.current || mapRef.current || !accessToken) return;
 
-    const viewer = new Cesium.Viewer(containerRef.current, {
-      baseLayerPicker: false,
-      geocoder: false,
-      homeButton: false,
-      sceneModePicker: false,
-      selectionIndicator: false,
-      timeline: false,
-      animation: false,
-      navigationHelpButton: false,
-      fullscreenButton: false,
-      vrButton: false,
-      infoBox: false,
-      creditContainer: document.createElement('div'),
-      baseLayer: new Cesium.ImageryLayer(
-        new Cesium.UrlTemplateImageryProvider({
-          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          maximumLevel: 19,
-        })
-      ),
-    });
-
-    // Create a data source for country borders
-    const countryDataSource = new Cesium.CustomDataSource('countryBorders');
-    viewer.dataSources.add(countryDataSource);
-    countryDataSourceRef.current = countryDataSource;
-
-    // Dark theme styling
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0a0f14');
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0d1117');
-    viewer.scene.fog.enabled = true;
-    viewer.scene.fog.density = 0.0002;
-    viewer.scene.globe.enableLighting = false;
+    mapboxgl.accessToken = accessToken;
     
-    // Set initial camera position
-    viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(0, 20, 25000000),
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      projection: 'globe',
+      zoom: 1.5,
+      center: [0, 20],
+      pitch: 0,
     });
 
-    // Create a custom data source for game entities
-    const entityDataSource = new Cesium.CustomDataSource('gameEntities');
-    viewer.dataSources.add(entityDataSource);
-    entityDataSourceRef.current = entityDataSource;
+    map.addControl(
+      new mapboxgl.NavigationControl({
+        visualizePitch: true,
+      }),
+      'top-right'
+    );
 
-    viewerRef.current = viewer;
-    setIsLoaded(true);
+    map.on('style.load', () => {
+      // Add atmosphere and fog for globe effect
+      map.setFog({
+        color: 'rgb(10, 15, 20)',
+        'high-color': 'rgb(20, 30, 50)',
+        'horizon-blend': 0.1,
+        'space-color': 'rgb(5, 10, 15)',
+        'star-intensity': 0.6,
+      });
 
-    // Click handler - use ref to always get latest callback
-    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
-      // Check if clicking on an entity first
-      const picked = viewer.scene.pick(movement.position);
-      if (Cesium.defined(picked) && picked.id && picked.id.properties) {
-        const entityId = picked.id.properties.gameId?.getValue();
-        const entityType = picked.id.properties.entityType?.getValue();
-        
-        if (entityType === 'base' && entityId) {
-          const state = useGameStore.getState();
-          const base = state.bases.find(b => b.id === entityId);
-          if (base) {
-            state.selectBase(base);
-            return;
-          }
+      // Style country borders with white lines
+      map.addLayer({
+        id: 'country-borders',
+        type: 'line',
+        source: 'composite',
+        'source-layer': 'admin',
+        filter: ['==', ['get', 'admin_level'], 0],
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': 1,
+          'line-opacity': 0.6,
+        },
+      });
+
+      setIsLoaded(true);
+    });
+
+    // Click handler
+    map.on('click', (e) => {
+      onGlobeClickRef.current(e.lngLat.lat, e.lngLat.lng);
+    });
+
+    // Slow rotation
+    const secondsPerRevolution = 240;
+    let userInteracting = false;
+
+    function spinGlobe() {
+      if (!mapRef.current) return;
+      const zoom = mapRef.current.getZoom();
+      if (!userInteracting && zoom < 5) {
+        let distancePerSecond = 360 / secondsPerRevolution;
+        if (zoom > 3) {
+          const zoomDif = (5 - zoom) / 2;
+          distancePerSecond *= zoomDif;
         }
+        const center = mapRef.current.getCenter();
+        center.lng -= distancePerSecond;
+        mapRef.current.easeTo({ center, duration: 1000, easing: (n) => n });
       }
-      
-      // Otherwise handle as globe click for placement
-      const cartesian = viewer.camera.pickEllipsoid(
-        movement.position,
-        viewer.scene.globe.ellipsoid
-      );
-      
-      if (cartesian) {
-        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-        const lat = Cesium.Math.toDegrees(cartographic.latitude);
-        const lng = Cesium.Math.toDegrees(cartographic.longitude);
-        // Use ref to get latest callback
-        onGlobeClickRef.current(lat, lng);
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
+
+    map.on('mousedown', () => { userInteracting = true; });
+    map.on('dragstart', () => { userInteracting = true; });
+    map.on('mouseup', () => { userInteracting = false; spinGlobe(); });
+    map.on('touchend', () => { userInteracting = false; spinGlobe(); });
+    map.on('moveend', spinGlobe);
     
-    handlerRef.current = handler;
+    map.on('load', spinGlobe);
+
+    mapRef.current = map;
 
     return () => {
-      handler.destroy();
-      viewer.destroy();
-      viewerRef.current = null;
-      entityDataSourceRef.current = null;
-      countryDataSourceRef.current = null;
+      map.remove();
+      mapRef.current = null;
     };
-  }, []);
+  }, [accessToken]);
 
-  // Update entities when game state changes - without recreating viewer
+  // Update markers when game state changes
   useEffect(() => {
-    const entityDataSource = entityDataSourceRef.current;
-    if (!entityDataSource || !isLoaded) return;
+    const map = mapRef.current;
+    if (!map || !isLoaded) return;
 
-    // Clear only game entities, not the whole viewer
-    entityDataSource.entities.removeAll();
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
 
     const getFactionColor = (faction: string) => {
       switch (faction) {
-        case 'player': return Cesium.Color.fromCssColorString('#22c55e');
-        case 'ai': return Cesium.Color.fromCssColorString('#ef4444');
-        default: return Cesium.Color.fromCssColorString('#6b7280');
+        case 'player': return '#22c55e';
+        case 'ai': return '#ef4444';
+        default: return '#6b7280';
       }
     };
 
@@ -150,179 +141,152 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       }
     };
 
-    // Add territory influence circles
-    territories.forEach((territory) => {
-      entityDataSource.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(
-          territory.position.longitude,
-          territory.position.latitude
-        ),
-        ellipse: {
-          semiMajorAxis: territory.radius * 1000,
-          semiMinorAxis: territory.radius * 1000,
-          material: getFactionColor(territory.faction).withAlpha(0.15),
-          outline: true,
-          outlineColor: getFactionColor(territory.faction).withAlpha(0.5),
-          outlineWidth: 2,
-          height: 0,
+    // Add territory circles as layers if not exist
+    territories.forEach((territory, idx) => {
+      const sourceId = `territory-${idx}`;
+      const layerId = `territory-layer-${idx}`;
+      
+      if (map.getSource(sourceId)) {
+        map.removeLayer(layerId);
+        map.removeSource(sourceId);
+      }
+
+      const center = [territory.position.longitude, territory.position.latitude];
+      const radiusInKm = territory.radius;
+      const points = 64;
+      const coords: [number, number][] = [];
+      
+      for (let i = 0; i <= points; i++) {
+        const angle = (i / points) * 2 * Math.PI;
+        const dx = radiusInKm * Math.cos(angle);
+        const dy = radiusInKm * Math.sin(angle);
+        const lat = territory.position.latitude + (dy / 111);
+        const lng = territory.position.longitude + (dx / (111 * Math.cos(territory.position.latitude * Math.PI / 180)));
+        coords.push([lng, lat]);
+      }
+
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [coords],
+          },
+        },
+      });
+
+      map.addLayer({
+        id: layerId,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': getFactionColor(territory.faction),
+          'fill-opacity': 0.15,
         },
       });
     });
 
-    // Add all bases (including HQ which is in bases array)
+    // Add base markers
     bases.forEach((base) => {
       const color = getFactionColor(base.faction);
       const icon = getBaseIcon(base.type);
       
-      entityDataSource.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(
-          base.position.longitude,
-          base.position.latitude,
-          1000
-        ),
-        properties: {
-          gameId: base.id,
-          entityType: 'base',
-        },
-        point: {
-          pixelSize: base.type === 'hq' ? 20 : 14,
-          color: color,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-        label: {
-          text: `${icon} ${base.name}`,
-          font: '12px JetBrains Mono',
-          fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.TOP,
-          pixelOffset: new Cesium.Cartesian2(0, 15),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
+      const el = document.createElement('div');
+      el.className = 'flex flex-col items-center';
+      el.innerHTML = `
+        <div style="
+          width: ${base.type === 'hq' ? '20px' : '14px'};
+          height: ${base.type === 'hq' ? '20px' : '14px'};
+          background: ${color};
+          border: 2px solid white;
+          border-radius: 50%;
+        "></div>
+        <div style="
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          color: white;
+          text-shadow: 0 0 3px black, 0 0 3px black;
+          margin-top: 2px;
+          white-space: nowrap;
+        ">${icon} ${base.name}</div>
+      `;
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const state = useGameStore.getState();
+        state.selectBase(base);
       });
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([base.position.longitude, base.position.latitude])
+        .addTo(map);
+      
+      markersRef.current.push(marker);
     });
 
-    // Add units
+    // Add unit markers
     units.forEach((unit) => {
       const color = getFactionColor(unit.faction);
+      
+      const el = document.createElement('div');
+      el.innerHTML = `
+        <div style="
+          width: 8px;
+          height: 8px;
+          background: ${color};
+          border: 1px solid white;
+          border-radius: 50%;
+        "></div>
+        <div style="
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 8px;
+          color: white;
+          text-shadow: 0 0 2px black;
+          text-align: center;
+        ">${unit.templateType.substring(0, 3).toUpperCase()}</div>
+      `;
 
-      entityDataSource.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(
-          unit.position.longitude,
-          unit.position.latitude,
-          500
-        ),
-        point: {
-          pixelSize: 8,
-          color: color,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-        label: {
-          text: unit.templateType.substring(0, 3).toUpperCase(),
-          font: '10px JetBrains Mono',
-          fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 1,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.TOP,
-          pixelOffset: new Cesium.Cartesian2(0, 10),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      });
-
-      // Draw movement line if unit is moving
-      if (unit.destination) {
-        entityDataSource.entities.add({
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray([
-              unit.position.longitude,
-              unit.position.latitude,
-              unit.destination.longitude,
-              unit.destination.latitude,
-            ]),
-            width: 2,
-            material: new Cesium.PolylineDashMaterialProperty({
-              color: Cesium.Color.YELLOW,
-              dashLength: 16,
-            }),
-          },
-        });
-      }
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([unit.position.longitude, unit.position.latitude])
+        .addTo(map);
+      
+      markersRef.current.push(marker);
     });
-  }, [hq, bases, units, territories, isLoaded]);
+  }, [bases, units, territories, isLoaded]);
 
-  // Load country data
-  useEffect(() => {
-    loadCountries().then(() => {
-      setCountriesLoaded(true);
-    });
-  }, []);
-
-  // Render country borders and territory control
-  useEffect(() => {
-    const countryDataSource = countryDataSourceRef.current;
-    if (!countryDataSource || !isLoaded || !countriesLoaded) return;
-
-    countryDataSource.entities.removeAll();
-
-    const BORDER_WIDTH = 2;
-    const HOME_COLOR = Cesium.Color.fromCssColorString('#3b82f6'); // Blue
-    const OCCUPIED_COLOR = Cesium.Color.fromCssColorString('#ef4444'); // Red
-    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#6b7280'); // Gray
-
-    COUNTRIES.forEach((country) => {
-      try {
-        let borderColor = NEUTRAL_COLOR;
-        let borderWidth = BORDER_WIDTH;
-
-        if (country.id === homeCountryId) {
-          borderColor = HOME_COLOR;
-          borderWidth = 4;
-        } else if (occupiedCountryIds.includes(country.id)) {
-          borderColor = OCCUPIED_COLOR;
-          borderWidth = 4;
-        }
-
-        // Handle MultiPolygon - each polygon is a separate landmass
-        for (const polygon of country.coordinates) {
-          if (!Array.isArray(polygon) || polygon.length === 0) continue;
-          
-          const ring = polygon[0];
-          if (!Array.isArray(ring) || ring.length < 3) continue;
-
-          // Convert coordinates for Cesium [lng, lat] -> Cartesian3 array
-          const cartesianPositions: Cesium.Cartesian3[] = [];
-          for (const coord of ring) {
-            if (Array.isArray(coord) && coord.length >= 2) {
-              cartesianPositions.push(Cesium.Cartesian3.fromDegrees(coord[0], coord[1]));
-            }
-          }
-
-          if (cartesianPositions.length < 3) continue;
-
-          // Close the ring
-          cartesianPositions.push(cartesianPositions[0]);
-
-          // Add polyline border only (no polygon fills to avoid antimeridian issues)
-          countryDataSource.entities.add({
-            polyline: {
-              positions: cartesianPositions,
-              width: borderWidth,
-              material: borderColor,
-              clampToGround: true,
-            },
-          });
-        }
-      } catch (e) {
-        // Skip malformed country data
-      }
-    });
-  }, [homeCountryId, occupiedCountryIds, isLoaded, countriesLoaded]);
+  // Token input if not set
+  if (!accessToken) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 p-6 max-w-md">
+          <h2 className="text-xl font-mono text-foreground">Mapbox Token Required</h2>
+          <p className="text-sm text-muted-foreground text-center">
+            Enter your Mapbox public token to enable the globe. Get one at{' '}
+            <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              mapbox.com
+            </a>
+          </p>
+          <input
+            type="text"
+            placeholder="pk.eyJ..."
+            className="w-full px-3 py-2 bg-muted border border-border rounded font-mono text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const value = (e.target as HTMLInputElement).value;
+                if (value.startsWith('pk.')) {
+                  localStorage.setItem('mapbox_token', value);
+                  setAccessToken(value);
+                }
+              }
+            }}
+          />
+          <p className="text-xs text-muted-foreground">Press Enter to save</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full">
