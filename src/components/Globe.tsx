@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { useGameStore } from '@/store/gameStore';
+import { COUNTRIES } from '@/data/countries';
 
 // Configure Cesium
 (window as any).CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/';
@@ -15,10 +16,11 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const handlerRef = useRef<Cesium.ScreenSpaceEventHandler | null>(null);
   const entityDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
+  const countryDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
   const onGlobeClickRef = useRef(onGlobeClick);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const { hq, bases, units, territories, selectBase } = useGameStore();
+  const { hq, bases, units, territories, selectBase, homeCountryId, occupiedCountryIds } = useGameStore();
 
   // Keep callback ref updated
   useEffect(() => {
@@ -50,13 +52,10 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       ),
     });
 
-    // Add country borders overlay layer
-    viewer.imageryLayers.addImageryProvider(
-      new Cesium.UrlTemplateImageryProvider({
-        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        maximumLevel: 19,
-      })
-    );
+    // Create a data source for country borders
+    const countryDataSource = new Cesium.CustomDataSource('countryBorders');
+    viewer.dataSources.add(countryDataSource);
+    countryDataSourceRef.current = countryDataSource;
 
     // Dark theme styling
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0a0f14');
@@ -119,6 +118,7 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       viewer.destroy();
       viewerRef.current = null;
       entityDataSourceRef.current = null;
+      countryDataSourceRef.current = null;
     };
   }, []);
 
@@ -254,6 +254,60 @@ export default function Globe({ onGlobeClick }: GlobeProps) {
       }
     });
   }, [hq, bases, units, territories, isLoaded]);
+
+  // Render country borders and territory control
+  useEffect(() => {
+    const countryDataSource = countryDataSourceRef.current;
+    if (!countryDataSource || !isLoaded) return;
+
+    countryDataSource.entities.removeAll();
+
+    const BORDER_WIDTH = 4;
+    const HOME_COLOR = Cesium.Color.fromCssColorString('#3b82f6'); // Blue
+    const OCCUPIED_COLOR = Cesium.Color.fromCssColorString('#ef4444'); // Red
+    const NEUTRAL_COLOR = Cesium.Color.fromCssColorString('#6b7280'); // Gray
+
+    COUNTRIES.forEach((country) => {
+      let borderColor = NEUTRAL_COLOR;
+      let fillColor: Cesium.Color | undefined = undefined;
+
+      if (country.id === homeCountryId) {
+        borderColor = HOME_COLOR;
+        fillColor = HOME_COLOR.withAlpha(0.15);
+      } else if (occupiedCountryIds.includes(country.id)) {
+        borderColor = OCCUPIED_COLOR;
+        fillColor = OCCUPIED_COLOR.withAlpha(0.15);
+      }
+
+      // Convert coordinates for Cesium
+      const positions: number[] = [];
+      country.coordinates[0].forEach(([lng, lat]) => {
+        positions.push(lng, lat);
+      });
+
+      // Add country polygon with border
+      countryDataSource.entities.add({
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(positions),
+          material: fillColor || Cesium.Color.TRANSPARENT,
+          outline: true,
+          outlineColor: borderColor,
+          outlineWidth: BORDER_WIDTH,
+          height: 0,
+        },
+      });
+
+      // Add thicker polyline border for better visibility
+      countryDataSource.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(positions),
+          width: BORDER_WIDTH,
+          material: borderColor,
+          clampToGround: true,
+        },
+      });
+    });
+  }, [homeCountryId, occupiedCountryIds, isLoaded]);
 
   return (
     <div className="relative w-full h-full">
