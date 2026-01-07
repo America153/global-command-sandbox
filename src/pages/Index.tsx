@@ -106,8 +106,8 @@ export default function Index() {
           )}
           
           {/* Coordinate Overlay */}
-          <div className="absolute bottom-4 left-4 bg-card/80 backdrop-blur-sm rounded px-3 py-1.5 border border-border">
-            <span className="text-xs font-mono text-muted-foreground">
+          <div className="absolute bottom-4 left-4 bg-background/60 backdrop-blur-xl rounded-lg px-3 py-2 border border-white/10">
+            <span className="text-[10px] text-muted-foreground/70">
               {missileTargeting.isActive 
                 ? '🎯 Click to select missile target' 
                 : deployment.isActive 

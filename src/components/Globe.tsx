@@ -18,10 +18,8 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
   
   const { bases, units, territories, homeCountryId, occupiedCountryIds, capturedCountryIds, struckCountryIds, missilesInFlight, explosions, aiEnemy } = useGameStore();
   
-  // Check if player has intel capability for enemy unit visibility
   const hasIntelBase = useMemo(() => bases.some(b => b.type === 'intelligence' && b.faction === 'player'), [bases]);
   
-  // Compute visible enemy entities based on revealed bases and intel capability
   const visibleEnemyBases = useMemo(() => 
     aiEnemy.bases.filter(base => aiEnemy.revealedBases.includes(base.id)),
     [aiEnemy.bases, aiEnemy.revealedBases]
@@ -32,7 +30,6 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
     [hasIntelBase, aiEnemy.units]
   );
 
-  // Handle resize
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -53,7 +50,6 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
     };
   }, []);
 
-  // Load countries GeoJSON
   useEffect(() => {
     fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
       .then(res => res.json())
@@ -67,103 +63,91 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
       .catch(console.error);
   }, []);
 
-  // Setup globe (no auto-rotate)
   useEffect(() => {
     if (!globeRef.current || !isLoaded) return;
     
     const globe = globeRef.current;
     if (globe.controls) {
       globe.controls().autoRotate = false;
+      globe.controls().enableDamping = true;
+      globe.controls().dampingFactor = 0.1;
     }
-    globe.pointOfView({ altitude: 2.5 });
+    globe.pointOfView({ altitude: 2.2 });
   }, [isLoaded, dimensions]);
 
-  // Click handler for globe
   const handleGlobeClick = useCallback((coords: { lat: number; lng: number } | null, event?: MouseEvent) => {
     if (coords && coords.lat !== undefined && coords.lng !== undefined) {
       onGlobeClick(coords.lat, coords.lng);
     }
   }, [onGlobeClick]);
 
-  // Click handler for polygons (countries)
   const handlePolygonClick = useCallback((polygon: any, event: MouseEvent, coords: { lat: number; lng: number }) => {
     if (coords && coords.lat !== undefined && coords.lng !== undefined) {
       onGlobeClick(coords.lat, coords.lng);
     }
   }, [onGlobeClick]);
 
-  // Get country color based on control
   const getPolygonColor = useCallback((feature: any) => {
     const rawId = feature?.id ?? feature?.properties?.id;
     const countryId = rawId != null ? String(rawId) : null;
-
-    // NOTE: use legacy hsla() syntax because react-globe.gl's color parser
-    // doesn't fully support the newer "hsl(... / a)" CSS format.
     
-    // Captured countries are bright blue (player controlled)
     if (countryId && capturedCountryIds.includes(countryId)) {
-      return 'hsla(217, 91%, 50%, 0.7)'; // Bright blue for captured/player territory
+      return 'hsla(142, 70%, 45%, 0.6)';
     }
     
-    // Home country is blue
     if (countryId && homeCountryId && countryId === String(homeCountryId)) {
-      return 'hsla(217, 91%, 60%, 0.55)'; // Blue for HQ country
+      return 'hsla(142, 70%, 50%, 0.5)';
     }
     
-    // Struck countries are bright red (under attack)
     if (countryId && struckCountryIds.includes(countryId)) {
-      return 'hsla(0, 100%, 50%, 0.7)'; // Bright red for missile struck
+      return 'hsla(0, 80%, 50%, 0.65)';
     }
 
-    // Occupied countries (has enemy defenders) are red
     if (countryId && occupiedCountryIds.includes(countryId)) {
-      return 'hsla(0, 84%, 60%, 0.55)'; // Red for crossed/occupied with enemies
+      return 'hsla(0, 70%, 45%, 0.5)';
     }
 
-    return 'hsla(215, 28%, 17%, 0.85)'; // Default dark
+    return 'hsla(220, 20%, 18%, 0.7)';
   }, [homeCountryId, occupiedCountryIds, capturedCountryIds, struckCountryIds]);
 
-  // Get base icon based on type
   const getBaseIcon = (type: string) => {
     switch (type) {
-      case 'hq': return '⊕';
-      case 'army': return '🛡';
-      case 'navy': return '⚓';
-      case 'airforce': return '✈';
-      case 'intelligence': return '👁';
-      case 'missile': return '🚀';
+      case 'hq': return '◉';
+      case 'army': return '▣';
+      case 'navy': return '◈';
+      case 'airforce': return '△';
+      case 'intelligence': return '◎';
+      case 'missile': return '◆';
       default: return '●';
     }
   };
-  // Flat labels for player bases (rendered on globe surface)
+
   const baseLabels = useMemo(() => {
     const allBases = [...bases, ...visibleEnemyBases];
     return allBases.map(base => ({
       lat: base.position.latitude,
       lng: base.position.longitude,
       text: `${getBaseIcon(base.type)} ${base.name}`,
-      color: base.faction === 'player' ? '#22c55e' : '#ef4444',
-      size: base.type === 'hq' ? 0.6 : 0.4,
+      color: base.faction === 'player' ? '#4ade80' : '#f87171',
+      size: base.type === 'hq' ? 0.55 : 0.4,
       base,
     }));
   }, [bases, visibleEnemyBases]);
 
-  // Flat labels for units - player units always visible, enemy units only with intel
   const unitLabels = useMemo(() => {
     const allUnits = [...units, ...visibleEnemyUnits];
     return allUnits.map(unit => ({
       lat: unit.position.latitude,
       lng: unit.position.longitude,
-      text: `◆ ${unit.templateType.substring(0, 3).toUpperCase()}`,
-      color: unit.faction === 'player' ? '#ffffff' : '#ff6666',
-      size: 0.5,
-      unit: unit, // Store reference to the unit
+      text: `● ${unit.templateType.substring(0, 3).toUpperCase()}`,
+      color: unit.faction === 'player' ? '#e2e8f0' : '#fca5a5',
+      size: 0.4,
+      unit: unit,
     }));
   }, [units, visibleEnemyUnits]);
 
   const allLabels = useMemo(() => [...baseLabels, ...unitLabels], [baseLabels, unitLabels]);
 
-  // Movement arcs for units with destinations
   const movementArcs = useMemo(() => units
     .filter(unit => unit.status === 'moving' && unit.destination)
     .map(unit => ({
@@ -171,69 +155,66 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
       startLng: unit.position.longitude,
       endLat: unit.destination!.latitude,
       endLng: unit.destination!.longitude,
-      color: unit.faction === 'player' ? ['#22c55e', '#86efac'] : ['#ef4444', '#fca5a5'],
+      color: unit.faction === 'player' ? ['#4ade80', '#86efac'] : ['#f87171', '#fca5a5'],
       name: unit.name,
     })), [units]);
 
-  // Missile arcs - more visible with thicker stroke and brighter colors
   const missileArcs = useMemo(() => missilesInFlight.map(missile => ({
     startLat: missile.startPosition.latitude,
     startLng: missile.startPosition.longitude,
     endLat: missile.targetPosition.latitude,
     endLng: missile.targetPosition.longitude,
-    color: ['#ff0000', '#ffff00', '#ff6600'],
-    name: `🚀 ${MISSILE_TEMPLATES[missile.missileType]?.name || 'Missile'} → Target`,
-    stroke: 2,
-    dashLength: 0.6,
-    dashGap: 0.1,
-    dashAnimateTime: 500,
+    color: ['#ef4444', '#f97316', '#eab308'],
+    name: `${MISSILE_TEMPLATES[missile.missileType]?.name || 'Missile'} → Target`,
+    stroke: 1.5,
+    dashLength: 0.5,
+    dashGap: 0.15,
+    dashAnimateTime: 400,
   })), [missilesInFlight]);
 
   const allArcs = useMemo(() => [...movementArcs, ...missileArcs], [movementArcs, missileArcs]);
 
-  // Explosion rings (animated growing circles)
   const explosionRings = useMemo(() => explosions.map(explosion => ({
     lat: explosion.position.latitude,
     lng: explosion.position.longitude,
-    maxR: 3,
-    propagationSpeed: 2,
-    repeatPeriod: 1000,
-    color: () => 'rgba(255, 100, 0, 0.8)',
+    maxR: 2.5,
+    propagationSpeed: 2.5,
+    repeatPeriod: 800,
+    color: () => 'rgba(251, 146, 60, 0.7)',
   })), [explosions]);
 
-  // Explosion points (bright center points)
   const explosionPoints = useMemo(() => explosions.map(explosion => ({
     lat: explosion.position.latitude,
     lng: explosion.position.longitude,
-    size: 2,
-    color: '#ff4400',
+    size: 1.5,
+    color: '#fb923c',
   })), [explosions]);
 
   if (!isLoaded || dimensions.width === 0) {
     return (
-      <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground font-mono text-sm">INITIALIZING BATTLESPACE...</p>
+      <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-[#080c10]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground/60 text-xs tracking-wide">Initializing...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-[#0a0f14]">
+    <div ref={containerRef} className="relative w-full h-full bg-[#050810]">
       <GlobeGL
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        globeImageUrl="/globe/earth-nasa-hires.jpg"
+        globeImageUrl="/globe/earth-blue-marble.jpg"
         backgroundImageUrl="/globe/night-sky.png"
         bumpImageUrl="/globe/earth-topology.png"
         polygonsData={countriesData.features}
         polygonCapColor={getPolygonColor}
-        polygonSideColor={() => 'rgba(40, 60, 90, 0.4)'}
-        polygonStrokeColor={() => '#ffffff'}
-        polygonAltitude={0.006}
+        polygonSideColor={() => 'rgba(30, 45, 70, 0.3)'}
+        polygonStrokeColor={() => 'rgba(255, 255, 255, 0.15)'}
+        polygonAltitude={0.005}
         onPolygonClick={handlePolygonClick}
         labelsData={allLabels}
         labelLat="lat"
@@ -241,14 +222,13 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
         labelText="text"
         labelColor="color"
         labelSize="size"
-        labelAltitude={0.01}
-        labelDotRadius={0.4}
-        labelResolution={3}
+        labelAltitude={0.008}
+        labelDotRadius={0.3}
+        labelResolution={2}
         onLabelClick={(label: any, event: MouseEvent) => {
           if (label.base) {
             useGameStore.getState().selectBase(label.base);
           } else if (label.unit && onUnitClick) {
-            // Get screen position from mouse event
             onUnitClick(label.unit, { x: event.clientX, y: event.clientY });
           }
         }}
@@ -259,12 +239,12 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
         arcEndLat="endLat"
         arcEndLng="endLng"
         arcColor="color"
-        arcDashLength={(d: any) => d.dashLength || 0.4}
+        arcDashLength={(d: any) => d.dashLength || 0.35}
         arcDashGap={(d: any) => d.dashGap || 0.2}
-        arcDashAnimateTime={(d: any) => d.dashAnimateTime || 1500}
-        arcStroke={(d: any) => d.stroke || 0.5}
-        arcAltitudeAutoScale={0.4}
-        arcLabel={(d: any) => `<div style="font-family: monospace; background: rgba(0,0,0,0.9); padding: 6px 10px; border-radius: 4px; color: ${d.stroke ? '#ff4444' : 'white'}; border: 1px solid ${d.stroke ? '#ff4444' : '#333'};">${d.name}</div>`}
+        arcDashAnimateTime={(d: any) => d.dashAnimateTime || 1200}
+        arcStroke={(d: any) => d.stroke || 0.4}
+        arcAltitudeAutoScale={0.35}
+        arcLabel={(d: any) => `<div style="font-family: system-ui; font-size: 11px; background: rgba(0,0,0,0.85); padding: 5px 8px; border-radius: 6px; color: #f1f5f9; border: 1px solid rgba(255,255,255,0.1);">${d.name}</div>`}
         ringsData={explosionRings}
         ringLat="lat"
         ringLng="lng"
@@ -272,15 +252,15 @@ export default function Globe({ onGlobeClick, onUnitClick }: GlobeProps) {
         ringPropagationSpeed="propagationSpeed"
         ringRepeatPeriod="repeatPeriod"
         ringColor="color"
-        ringAltitude={0.015}
+        ringAltitude={0.012}
         pointsData={explosionPoints}
         pointLat="lat"
         pointLng="lng"
         pointColor="color"
-        pointAltitude={0.02}
+        pointAltitude={0.015}
         pointRadius="size"
-        atmosphereColor="#1e40af"
-        atmosphereAltitude={0.15}
+        atmosphereColor="#3b82f6"
+        atmosphereAltitude={0.18}
       />
     </div>
   );

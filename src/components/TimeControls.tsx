@@ -5,21 +5,21 @@ import {
   Play, 
   FastForward,
   RotateCcw,
-  Zap
+  Zap,
+  Clock
 } from 'lucide-react';
 
 const TimeControls = forwardRef<HTMLDivElement>(function TimeControls(_, ref) {
   const { speed, setSpeed, runTick, resetGame, tick, hq } = useGameStore();
   const tickIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Game loop
   useEffect(() => {
     if (tickIntervalRef.current) {
       clearInterval(tickIntervalRef.current);
     }
 
     if (speed > 0 && hq) {
-      const interval = 1000 / speed; // Faster interval at higher speeds
+      const interval = 1000 / speed;
       tickIntervalRef.current = setInterval(() => {
         runTick();
       }, interval);
@@ -33,67 +33,68 @@ const TimeControls = forwardRef<HTMLDivElement>(function TimeControls(_, ref) {
   }, [speed, runTick, hq]);
 
   const speedOptions = [
-    { value: 0, icon: <Pause className="w-4 h-4" />, label: 'PAUSE' },
-    { value: 1, icon: <Play className="w-4 h-4" />, label: '1X' },
-    { value: 2, icon: <FastForward className="w-4 h-4" />, label: '2X' },
-    { value: 4, icon: <Zap className="w-4 h-4" />, label: '4X' },
+    { value: 0, icon: <Pause className="w-3.5 h-3.5" />, label: 'Pause' },
+    { value: 1, icon: <Play className="w-3.5 h-3.5" />, label: '1×' },
+    { value: 2, icon: <FastForward className="w-3.5 h-3.5" />, label: '2×' },
+    { value: 4, icon: <Zap className="w-3.5 h-3.5" />, label: '4×' },
   ];
 
   return (
-    <div className="tactical-panel">
-      <div className="flex items-center gap-4 px-4 py-2">
-        {/* Time Display */}
-        <div className="flex items-center gap-3 border-r border-border pr-4">
-          <div className="text-xs font-mono text-muted-foreground">TIME</div>
-          <div className="font-mono text-lg text-primary tabular-nums min-w-[80px]">
+    <div className="bg-background/80 backdrop-blur-xl border-t border-white/10">
+      <div className="flex items-center justify-between px-4 py-2">
+        {/* Left: Time display */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-muted-foreground/60">
+            <Clock className="w-3.5 h-3.5" />
+            <span className="text-[10px] uppercase tracking-wide">Time</span>
+          </div>
+          <div className="font-mono text-sm font-semibold text-foreground tabular-nums">
             T+{String(tick).padStart(6, '0')}
           </div>
         </div>
 
-        {/* Speed Controls */}
-        <div className="flex items-center gap-1">
+        {/* Center: Speed controls */}
+        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
           {speedOptions.map((option) => (
             <button
               key={option.value}
               onClick={() => setSpeed(option.value)}
               disabled={!hq && option.value > 0}
               className={`
-                tactical-button flex items-center gap-1 px-3 py-1.5 rounded transition-all
+                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-medium transition-all duration-150
                 ${speed === option.value 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-muted/30 text-foreground hover:bg-muted/50'
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
+                  : 'text-foreground/70 hover:text-foreground hover:bg-white/10'
                 }
-                ${!hq && option.value > 0 ? 'opacity-40 cursor-not-allowed' : ''}
+                ${!hq && option.value > 0 ? 'opacity-30 cursor-not-allowed' : ''}
               `}
             >
               {option.icon}
-              <span className="text-xs font-mono hidden sm:inline">{option.label}</span>
+              <span className="hidden sm:inline">{option.label}</span>
             </button>
           ))}
         </div>
 
-        {/* Separator */}
-        <div className="border-l border-border h-6" />
+        {/* Right: Reset and status */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (confirm('Reset game? All progress will be lost.')) {
+                resetGame();
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-medium text-destructive/80 hover:text-destructive hover:bg-destructive/10 transition-all"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Reset</span>
+          </button>
 
-        {/* Reset Button */}
-        <button
-          onClick={() => {
-            if (confirm('Reset game? All progress will be lost.')) {
-              resetGame();
-            }
-          }}
-          className="tactical-button flex items-center gap-2 px-3 py-1.5 rounded bg-destructive/20 text-destructive hover:bg-destructive/30 transition-all"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span className="text-xs font-mono hidden sm:inline">RESET</span>
-        </button>
-
-        {/* Status Indicator */}
-        <div className="ml-auto flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${speed > 0 && hq ? 'bg-friendly' : 'bg-muted-foreground'}`} />
-          <span className="text-[10px] font-mono text-muted-foreground">
-            {!hq ? 'AWAITING HQ' : speed === 0 ? 'PAUSED' : 'RUNNING'}
-          </span>
+          <div className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${speed > 0 && hq ? 'bg-friendly' : 'bg-muted-foreground/40'}`} />
+            <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">
+              {!hq ? 'Awaiting HQ' : speed === 0 ? 'Paused' : 'Active'}
+            </span>
+          </div>
         </div>
       </div>
     </div>
